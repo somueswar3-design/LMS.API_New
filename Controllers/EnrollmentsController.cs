@@ -103,13 +103,13 @@ public class ExamsController(LmsDbContext db, IEmailService emailSvc) : Controll
     {
         var exam = new Exam
         {
-            Title           = req.Title,
-            Instructions    = req.Instructions,
-            CourseId        = req.CourseId,
-            TimeLimitMins   = req.TimeLimitMins,
+            Title = req.Title,
+            Instructions = req.Instructions,
+            CourseId = req.CourseId,
+            TimeLimitMins = req.TimeLimitMins,
             PassMarkPercent = req.PassMarkPercent,
-            MaxAttempts     = req.MaxAttempts,
-            Randomize       = req.Randomize
+            MaxAttempts = req.MaxAttempts,
+            Randomize = req.Randomize
         };
         db.Exams.Add(exam);
         await db.SaveChangesAsync();
@@ -122,13 +122,13 @@ public class ExamsController(LmsDbContext db, IEmailService emailSvc) : Controll
     {
         var exam = await db.Exams.FindAsync(id);
         if (exam is null) return NotFound();
-        if (req.Title           is not null) exam.Title           = req.Title;
-        if (req.Instructions    is not null) exam.Instructions    = req.Instructions;
-        if (req.TimeLimitMins   is not null) exam.TimeLimitMins   = req.TimeLimitMins.Value;
+        if (req.Title is not null) exam.Title = req.Title;
+        if (req.Instructions is not null) exam.Instructions = req.Instructions;
+        if (req.TimeLimitMins is not null) exam.TimeLimitMins = req.TimeLimitMins.Value;
         if (req.PassMarkPercent is not null) exam.PassMarkPercent = req.PassMarkPercent.Value;
-        if (req.MaxAttempts     is not null) exam.MaxAttempts     = req.MaxAttempts.Value;
-        if (req.IsPublished     is not null) exam.IsPublished     = req.IsPublished.Value;
-        if (req.Randomize       is not null) exam.Randomize       = req.Randomize.Value;
+        if (req.MaxAttempts is not null) exam.MaxAttempts = req.MaxAttempts.Value;
+        if (req.IsPublished is not null) exam.IsPublished = req.IsPublished.Value;
+        if (req.Randomize is not null) exam.Randomize = req.Randomize.Value;
         await db.SaveChangesAsync();
         return NoContent();
     }
@@ -140,11 +140,11 @@ public class ExamsController(LmsDbContext db, IEmailService emailSvc) : Controll
     {
         var q = new Question
         {
-            ExamId       = examId,
-            Text         = req.Text,
-            Type         = Enum.Parse<QuestionType>(req.Type),
-            Marks        = req.Marks,
-            Explanation  = req.Explanation,
+            ExamId = examId,
+            Text = req.Text,
+            Type = Enum.Parse<QuestionType>(req.Type),
+            Marks = req.Marks,
+            Explanation = req.Explanation,
             DisplayOrder = req.DisplayOrder
         };
         db.Questions.Add(q);
@@ -203,21 +203,21 @@ public class ExamsController(LmsDbContext db, IEmailService emailSvc) : Controll
             var answer = new Answer
             {
                 ExamAttemptId = attempt.Id,
-                QuestionId    = sa.QuestionId,
-                TextAnswer    = sa.TextAnswer,
-                IsCorrect     = correct,
-                MarksAwarded  = correct ? q.Marks : 0
+                QuestionId = sa.QuestionId,
+                TextAnswer = sa.TextAnswer,
+                IsCorrect = correct,
+                MarksAwarded = correct ? q.Marks : 0
             };
             db.Answers.Add(answer);
             if (correct) earned += q.Marks;
         }
 
         attempt.SubmittedAt = DateTime.UtcNow;
-        attempt.TotalMarks  = totalMarks;
-        attempt.Marks       = earned;
-        attempt.Score       = totalMarks > 0 ? (int)(earned * 100.0 / totalMarks) : 0;
-        attempt.Passed      = attempt.Score >= attempt.Exam.PassMarkPercent;
-        attempt.Status      = AttemptStatus.Graded;
+        attempt.TotalMarks = totalMarks;
+        attempt.Marks = earned;
+        attempt.Score = totalMarks > 0 ? (int)(earned * 100.0 / totalMarks) : 0;
+        attempt.Passed = attempt.Score >= attempt.Exam.PassMarkPercent;
+        attempt.Status = AttemptStatus.Graded;
 
         // Auto-issue certificate if passed - record total watch time
         if (attempt.Passed && !await db.Certificates.AnyAsync(c => c.UserId == attempt.UserId && c.CourseId == attempt.Exam.CourseId))
@@ -225,9 +225,9 @@ public class ExamsController(LmsDbContext db, IEmailService emailSvc) : Controll
             var enrollment = await db.Enrollments.FirstOrDefaultAsync(e => e.UserId == attempt.UserId && e.CourseId == attempt.Exam.CourseId);
             db.Certificates.Add(new Certificate
             {
-                UserId            = attempt.UserId,
-                CourseId          = attempt.Exam.CourseId,
-                ExamAttemptId     = attempt.Id,
+                UserId = attempt.UserId,
+                CourseId = attempt.Exam.CourseId,
+                ExamAttemptId = attempt.Id,
                 CertificateNumber = Guid.NewGuid().ToString("N")[..12].ToUpper(),
                 TotalWatchMinutes = enrollment != null ? enrollment.TotalWatchSeconds / 60 : 0
             });
@@ -237,7 +237,7 @@ public class ExamsController(LmsDbContext db, IEmailService emailSvc) : Controll
 
         // Send exam result email
         var examUser = await db.Users.FindAsync(attempt.UserId);
-        var examOrg  = examUser is not null ? (await db.Organizations.FindAsync(examUser.OrganizationId))?.Name ?? "" : "";
+        var examOrg = examUser is not null ? (await db.Organizations.FindAsync(examUser.OrganizationId))?.Name ?? "" : "";
         if (examUser is not null)
             _ = emailSvc.SendExamResultAsync(examUser.Email, examUser.FirstName, attempt.Exam.Title, attempt.Score ?? 0, attempt.Passed, examOrg);
 
@@ -288,8 +288,8 @@ public class CertificatesController(LmsDbContext db) : ControllerBase
     public async Task<IActionResult> GetByUser(int userId)
     {
         var list = await db.Certificates
-            .Include(c => c.User)
-            .Include(c => c.Course)
+            .Include(c => c.User).ThenInclude(u => u.Organization)
+            .Include(c => c.Course).ThenInclude(c => c.Organization)
             .Where(c => c.UserId == userId)
             .ToListAsync();
         return Ok(list.Select(MapCert));
@@ -316,11 +316,22 @@ public class CertificatesController(LmsDbContext db) : ControllerBase
         return Ok(new { cert.DownloadedAt, cert.DownloadCount });
     }
 
-    static CertificateDto MapCert(Certificate c) => new(
-        c.Id, c.CertificateNumber, c.IssuedAt, c.PdfUrl,
-        c.UserId, $"{c.User.FirstName} {c.User.LastName}",
-        c.CourseId, c.Course.Title
-    );
+    static CertificateDto MapCert(Certificate c)
+    {
+        var org = c.Course.Organization ?? c.User.Organization;
+        return new CertificateDto(
+            c.Id, c.CertificateNumber, c.IssuedAt, c.PdfUrl,
+            c.UserId, $"{c.User.FirstName} {c.User.LastName}", c.User.Email,
+            c.CourseId, c.Course.Title,
+            c.Course.Level.ToString(), c.Course.Language,
+            c.TotalWatchMinutes,
+            org?.Name ?? "EKSHA TECHNOLOGIES",
+            org?.LogoUrl,
+            org?.SignatureUrl,
+            org?.AuthorizedBy,
+            org?.AuthorizedTitle
+        );
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -361,14 +372,52 @@ public class DashboardController(LmsDbContext db) : ControllerBase
             .Take(5)
             .ToListAsync();
 
-        return Ok(new OrgDashboardDto(
-            await db.Users.CountAsync(u => u.OrganizationId == orgId),
-            await db.Courses.CountAsync(c => c.OrganizationId == orgId),
-            total,
-            await db.Users.CountAsync(u => u.OrganizationId == orgId && u.Role == UserRole.Student),
-            total > 0 ? completed * 100.0 / total : 0,
-            topCourses
-        ));
+        // Last 6 months enrollment activity
+        var sixMonthsAgo = DateTime.UtcNow.AddMonths(-6);
+        var monthlyEnrollments = await db.Enrollments
+            .Where(e => e.Course.OrganizationId == orgId && e.EnrolledAt >= sixMonthsAgo)
+            .GroupBy(e => new { e.EnrolledAt.Year, e.EnrolledAt.Month })
+            .Select(g => new { g.Key.Year, g.Key.Month, Count = g.Count() })
+            .OrderBy(x => x.Year).ThenBy(x => x.Month)
+            .ToListAsync();
+
+        var monthlyRevenue = await db.OrderItems
+            .Where(oi => oi.Course.OrganizationId == orgId && oi.Order.Status == OrderStatus.Paid && oi.Order.CreatedAt >= sixMonthsAgo)
+            .GroupBy(oi => new { oi.Order.CreatedAt.Year, oi.Order.CreatedAt.Month })
+            .Select(g => new { g.Key.Year, g.Key.Month, Revenue = g.Sum(oi => oi.Price) })
+            .OrderBy(x => x.Year).ThenBy(x => x.Month)
+            .ToListAsync();
+
+        var monthLabels = Enumerable.Range(0, 6)
+            .Select(i => DateTime.UtcNow.AddMonths(-5 + i))
+            .Select(d => new {
+                Label = d.ToString("MMM"),
+                Year = d.Year,
+                Month = d.Month,
+                Enrollments = monthlyEnrollments.FirstOrDefault(x => x.Year == d.Year && x.Month == d.Month)?.Count ?? 0,
+                Revenue = monthlyRevenue.FirstOrDefault(x => x.Year == d.Year && x.Month == d.Month)?.Revenue ?? 0
+            }).ToList();
+
+        var recentStudents = await db.Users
+            .Where(u => u.OrganizationId == orgId && u.Role == UserRole.Student)
+            .OrderByDescending(u => u.CreatedAt)
+            .Take(5)
+            .Select(u => new { u.Id, u.FirstName, u.LastName, u.Email, u.CreatedAt })
+            .ToListAsync();
+
+        return Ok(new
+        {
+            users = await db.Users.CountAsync(u => u.OrganizationId == orgId),
+            courses = await db.Courses.CountAsync(c => c.OrganizationId == orgId),
+            enrollments = total,
+            students = await db.Users.CountAsync(u => u.OrganizationId == orgId && u.Role == UserRole.Student),
+            completionRate = total > 0 ? completed * 100.0 / total : 0,
+            topCourses,
+            monthlyActivity = monthLabels,
+            recentStudents,
+            revenue = (double)(await db.OrderItems.Where(oi => oi.Course.OrganizationId == orgId && oi.Order.Status == OrderStatus.Paid).SumAsync(oi => oi.Price)),
+            activeStudents = await db.LessonProgresses.Where(p => p.UpdatedAt >= DateTime.UtcNow.AddDays(-7) && p.Lesson.Module.Course.OrganizationId == orgId).Select(p => p.UserId).Distinct().CountAsync()
+        });
     }
 
     [HttpGet("student/{userId}")]
@@ -378,12 +427,30 @@ public class DashboardController(LmsDbContext db) : ControllerBase
             .Where(p => p.UserId == userId)
             .SumAsync(p => p.WatchedSeconds);
 
-        return Ok(new StudentDashboardDto(
-            await db.Enrollments.CountAsync(e => e.UserId == userId),
-            await db.Enrollments.CountAsync(e => e.UserId == userId && e.Status == EnrollmentStatus.Completed),
-            await db.Certificates.CountAsync(c => c.UserId == userId),
-            totalWatch / 60,
-            await db.Enrollments
+        // Last 7 days daily watch time
+        var sevenDaysAgo = DateTime.UtcNow.AddDays(-7);
+        var dailyWatch = await db.LessonProgresses
+            .Where(p => p.UserId == userId && p.UpdatedAt >= sevenDaysAgo)
+            .GroupBy(p => p.UpdatedAt.Date)
+            .Select(g => new { Date = g.Key, Minutes = g.Sum(p => p.WatchedSeconds) / 60 })
+            .OrderBy(x => x.Date)
+            .ToListAsync();
+
+        var weekActivity = Enumerable.Range(0, 7)
+            .Select(i => DateTime.UtcNow.AddDays(-6 + i).Date)
+            .Select(d => new {
+                label = d.ToString("ddd"),
+                minutes = dailyWatch.FirstOrDefault(x => x.Date == d)?.Minutes ?? 0
+            }).ToList();
+
+        return Ok(new
+        {
+            enrolledCourses = await db.Enrollments.CountAsync(e => e.UserId == userId),
+            completedCourses = await db.Enrollments.CountAsync(e => e.UserId == userId && e.Status == EnrollmentStatus.Completed),
+            certificatesEarned = await db.Certificates.CountAsync(c => c.UserId == userId),
+            totalWatchMinutes = totalWatch / 60,
+            weekActivity,
+            activeEnrollments = await db.Enrollments
                 .Include(e => e.User)
                 .Include(e => e.Course)
                 .Where(e => e.UserId == userId && e.Status == EnrollmentStatus.Active)
@@ -395,6 +462,6 @@ public class DashboardController(LmsDbContext db) : ControllerBase
                 ))
                 .Take(5)
                 .ToListAsync()
-        ));
+        });
     }
 }

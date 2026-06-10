@@ -41,8 +41,11 @@ public class OrganizationsController(LmsDbContext db) : ControllerBase
 
         var org = new Organization
         {
-            Name = req.Name, Slug = slug, Website = req.Website,
-            PrimaryColor = req.PrimaryColor ?? "#6366f1", PortalUrl = req.PortalUrl
+            Name = req.Name,
+            Slug = slug,
+            Website = req.Website,
+            PrimaryColor = req.PrimaryColor ?? "#6366f1",
+            PortalUrl = req.PortalUrl
         };
         db.Organizations.Add(org);
         await db.SaveChangesAsync();
@@ -56,17 +59,17 @@ public class OrganizationsController(LmsDbContext db) : ControllerBase
         var org = await db.Organizations.FindAsync(id);
         if (org is null) return NotFound();
 
-        if (req.Name is not null)           org.Name           = req.Name;
-        if (req.Website is not null)         org.Website        = req.Website;
-        if (req.PrimaryColor is not null)    org.PrimaryColor   = req.PrimaryColor;
-        if (req.SecondaryColor is not null)  org.SecondaryColor = req.SecondaryColor;
-        if (req.AccentColor is not null)     org.AccentColor    = req.AccentColor;
-        if (req.LogoUrl is not null)         org.LogoUrl        = req.LogoUrl;
-        if (req.BannerUrl is not null)       org.BannerUrl      = req.BannerUrl;
-        if (req.Tagline is not null)         org.Tagline        = req.Tagline;
-        if (req.ThemeFont is not null)       org.ThemeFont      = req.ThemeFont;
-        if (req.PortalUrl is not null)       org.PortalUrl      = req.PortalUrl;
-        if (req.IsActive is not null)        org.IsActive       = req.IsActive.Value;
+        if (req.Name is not null) org.Name = req.Name;
+        if (req.Website is not null) org.Website = req.Website;
+        if (req.PrimaryColor is not null) org.PrimaryColor = req.PrimaryColor;
+        if (req.SecondaryColor is not null) org.SecondaryColor = req.SecondaryColor;
+        if (req.AccentColor is not null) org.AccentColor = req.AccentColor;
+        if (req.LogoUrl is not null) org.LogoUrl = req.LogoUrl;
+        if (req.BannerUrl is not null) org.BannerUrl = req.BannerUrl;
+        if (req.Tagline is not null) org.Tagline = req.Tagline;
+        if (req.ThemeFont is not null) org.ThemeFont = req.ThemeFont;
+        if (req.PortalUrl is not null) org.PortalUrl = req.PortalUrl;
+        if (req.IsActive is not null) org.IsActive = req.IsActive.Value;
 
         await db.SaveChangesAsync();
         return NoContent();

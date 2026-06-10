@@ -83,7 +83,15 @@ public record SubmitAttemptRequest(int AttemptId, List<SubmitAnswerRequest> Answ
 public record SubmitAnswerRequest(int QuestionId, string? TextAnswer, List<int>? SelectedOptionIds);
 
 // ─── CERTIFICATE ──────────────────────────────────────────────
-public record CertificateDto(int Id, string CertificateNumber, DateTime IssuedAt, string? PdfUrl, int UserId, string UserName, int CourseId, string CourseTitle);
+public record CertificateDto(
+    int Id, string CertificateNumber, DateTime IssuedAt, string? PdfUrl,
+    int UserId, string UserName, string? UserEmail,
+    int CourseId, string CourseTitle, string? CourseLevel, string? CourseLanguage,
+    int TotalWatchMinutes,
+    // Org branding
+    string OrgName, string? OrgLogoUrl, string? OrgSignatureUrl,
+    string? AuthorizedBy, string? AuthorizedTitle
+);
 
 // ─── DASHBOARD ────────────────────────────────────────────────
 public record AdminDashboardDto(int TotalOrgs, int TotalUsers, int TotalCourses, int TotalEnrollments, List<RecentActivityDto> RecentActivity);

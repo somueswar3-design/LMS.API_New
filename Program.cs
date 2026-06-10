@@ -38,10 +38,10 @@ builder.Services.Configure<IISServerOptions>(opt =>
 // Form options — allow large multipart bodies
 builder.Services.Configure<FormOptions>(opt =>
 {
-    opt.MultipartBodyLengthLimit  = 2L * 1024 * 1024 * 1024;
-    opt.ValueLengthLimit          = int.MaxValue;
+    opt.MultipartBodyLengthLimit = 2L * 1024 * 1024 * 1024;
+    opt.ValueLengthLimit = int.MaxValue;
     opt.MultipartHeadersLengthLimit = int.MaxValue;
-    opt.BufferBodyLengthLimit     = 2L * 1024 * 1024 * 1024;
+    opt.BufferBodyLengthLimit = 2L * 1024 * 1024 * 1024;
 });
 
 // ─── MySQL via Pomelo ──────────────────────────────────────────
@@ -57,19 +57,30 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         {
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!)),
-            ValidateIssuer   = true, ValidIssuer   = builder.Configuration["Jwt:Issuer"],
-            ValidateAudience = true, ValidAudience = builder.Configuration["Jwt:Audience"],
+            ValidateIssuer = true,
+            ValidIssuer = builder.Configuration["Jwt:Issuer"],
+            ValidateAudience = true,
+            ValidAudience = builder.Configuration["Jwt:Audience"],
             ClockSkew = TimeSpan.Zero
         };
     });
 
 builder.Services.AddAuthorization();
-builder.Services.AddScoped<IAuthService,       AuthService>();
-builder.Services.AddScoped<IRazorpayService,   RazorpayService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IRazorpayService, RazorpayService>();
 builder.Services.AddScoped<ICloudflareService, CloudflareService>();
-builder.Services.AddScoped<IEmailService,      EmailService>();
+builder.Services.AddScoped<IEmailService, EmailService>();
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(opts =>
+    {
+        // Serialize all JSON responses with camelCase property names
+        opts.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
+        // Deserialize both camelCase and PascalCase from client
+        opts.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
+        // Serialize enums as strings (e.g. "Video" not 0)
+        opts.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+    });
 builder.Services.AddEndpointsApiExplorer();
 
 builder.Services.AddSwaggerGen(c =>
@@ -77,23 +88,24 @@ builder.Services.AddSwaggerGen(c =>
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "LMS API", Version = "v1" });
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
-        Description = "JWT Bearer token", Name = "Authorization",
-        In = ParameterLocation.Header, Type = SecuritySchemeType.ApiKey, Scheme = "Bearer"
+        Description = "JWT Bearer token",
+        Name = "Authorization",
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.ApiKey,
+        Scheme = "Bearer"
     });
     c.AddSecurityRequirement(new OpenApiSecurityRequirement {{
         new OpenApiSecurityScheme { Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }}, []
     }});
 });
 
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowAll", policy =>
-    {
-        policy.AllowAnyOrigin()
-              .AllowAnyMethod()
-              .AllowAnyHeader();
-    });
-});
+builder.Services.AddCors(opt =>
+    opt.AddPolicy("AllowFrontend", p =>
+        p.WithOrigins("http://localhost:5173", "http://localhost:3000")
+         .AllowAnyHeader().AllowAnyMethod().AllowCredentials()
+    )
+);
+
 var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
@@ -106,7 +118,7 @@ using (var scope = app.Services.CreateScope())
 app.UseSwagger();
 app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "LMS API v1"));
 app.UseSerilogRequestLogging();
-app.UseCors("AllowAll");
+app.UseCors("AllowFrontend");
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

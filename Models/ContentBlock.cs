@@ -68,20 +68,28 @@ public class ContentBlock
 // Helper: parse/serialize content blocks JSON
 public static class ContentBlocks
 {
-    static readonly JsonSerializerOptions Opts = new()
+    // Write options: camelCase for API responses
+    static readonly JsonSerializerOptions WriteOpts = new()
     {
         PropertyNamingPolicy  = JsonNamingPolicy.CamelCase,
         WriteIndented         = false,
-        Converters            = { new JsonStringEnumConverter() }
+        Converters            = { new JsonStringEnumConverter() }  // PascalCase: 'Video' not 'video'
+    };
+
+    // Read options: case-insensitive to handle both old PascalCase and new camelCase stored JSON
+    static readonly JsonSerializerOptions ReadOpts = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        Converters                  = { new JsonStringEnumConverter() }
     };
 
     public static List<ContentBlock> Parse(string? json)
     {
         if (string.IsNullOrEmpty(json)) return [];
-        try { return JsonSerializer.Deserialize<List<ContentBlock>>(json, Opts) ?? []; }
+        try { return JsonSerializer.Deserialize<List<ContentBlock>>(json, ReadOpts) ?? []; }
         catch { return []; }
     }
 
     public static string Serialize(List<ContentBlock> blocks)
-        => JsonSerializer.Serialize(blocks, Opts);
+        => JsonSerializer.Serialize(blocks, WriteOpts);
 }

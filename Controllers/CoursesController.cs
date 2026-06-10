@@ -28,14 +28,13 @@ public class CoursesController(LmsDbContext db) : ControllerBase
             .Include(c => c.Ratings)
             .AsQueryable();
 
-        if (orgId.HasValue)        q = q.Where(c => c.OrganizationId == orgId.Value);
-        if (categoryId.HasValue)   q = q.Where(c => c.CategoryId == categoryId.Value);
+        if (orgId.HasValue) q = q.Where(c => c.OrganizationId == orgId.Value);
+        if (categoryId.HasValue) q = q.Where(c => c.CategoryId == categoryId.Value);
         if (!string.IsNullOrEmpty(level) && Enum.TryParse<CourseLevel>(level, out var lv))
             q = q.Where(c => c.Level == lv);
         if (!string.IsNullOrEmpty(status) && Enum.TryParse<CourseStatus>(status, out var st))
             q = q.Where(c => c.Status == st);
-        else
-            q = q.Where(c => c.Status == CourseStatus.Published); // default to published
+        // No default status filter — admin sees all, public portal filters separately
         if (!string.IsNullOrEmpty(search))
             q = q.Where(c => c.Title.Contains(search) || (c.Description != null && c.Description.Contains(search)));
 
@@ -66,17 +65,17 @@ public class CoursesController(LmsDbContext db) : ControllerBase
     {
         var course = new Course
         {
-            Title          = req.Title,
-            Description    = req.Description,
-            ThumbnailUrl   = req.ThumbnailUrl,
-            Level          = Enum.Parse<CourseLevel>(req.Level),
-            Price          = req.Price,
-            IsFree         = req.IsFree,
-            CategoryId     = req.CategoryId,
-            InstructorId   = req.InstructorId,
+            Title = req.Title,
+            Description = req.Description,
+            ThumbnailUrl = req.ThumbnailUrl,
+            Level = Enum.Parse<CourseLevel>(req.Level),
+            Price = req.Price,
+            IsFree = req.IsFree,
+            CategoryId = req.CategoryId,
+            InstructorId = req.InstructorId,
             OrganizationId = req.OrganizationId,
-            Tags           = req.Tags,
-            Language       = req.Language
+            Tags = req.Tags,
+            Language = req.Language
         };
         db.Courses.Add(course);
         await db.SaveChangesAsync();
@@ -90,15 +89,15 @@ public class CoursesController(LmsDbContext db) : ControllerBase
         var course = await db.Courses.FindAsync(id);
         if (course is null) return NotFound();
 
-        if (req.Title       is not null) course.Title       = req.Title;
+        if (req.Title is not null) course.Title = req.Title;
         if (req.Description is not null) course.Description = req.Description;
         if (req.ThumbnailUrl is not null) course.ThumbnailUrl = req.ThumbnailUrl;
-        if (req.Level       is not null) course.Level       = Enum.Parse<CourseLevel>(req.Level);
-        if (req.Status      is not null) course.Status      = Enum.Parse<CourseStatus>(req.Status);
-        if (req.Price       is not null) course.Price       = req.Price.Value;
-        if (req.IsFree      is not null) course.IsFree      = req.IsFree.Value;
-        if (req.CategoryId  is not null) course.CategoryId  = req.CategoryId.Value;
-        if (req.Tags        is not null) course.Tags        = req.Tags;
+        if (req.Level is not null) course.Level = Enum.Parse<CourseLevel>(req.Level);
+        if (req.Status is not null) course.Status = Enum.Parse<CourseStatus>(req.Status);
+        if (req.Price is not null) course.Price = req.Price.Value;
+        if (req.IsFree is not null) course.IsFree = req.IsFree.Value;
+        if (req.CategoryId is not null) course.CategoryId = req.CategoryId.Value;
+        if (req.Tags is not null) course.Tags = req.Tags;
         course.UpdatedAt = DateTime.UtcNow;
 
         await db.SaveChangesAsync();
@@ -129,12 +128,21 @@ public class CoursesController(LmsDbContext db) : ControllerBase
         c.CreatedAt, c.UpdatedAt,
         includeModules ? c.Modules.OrderBy(m => m.DisplayOrder).Select(m => new ModuleDto(
             m.Id, m.Title, m.Description, m.DisplayOrder, m.IsPreview, m.CourseId,
-            m.Lessons.OrderBy(l => l.DisplayOrder).Select(l => (object)new {
-                l.Id, l.Title, l.Description,
-                Type = l.Type.ToString(), l.IsPreview, l.IsPublished,
-                l.DisplayOrder, l.DurationSecs,
-                l.ModuleId, ModuleTitle = m.Title,
-                l.VideoUrl, l.FileUrl, l.Content
+            m.Lessons.OrderBy(l => l.DisplayOrder).Select(l => (object)new
+            {
+                l.Id,
+                l.Title,
+                l.Description,
+                Type = l.Type.ToString(),
+                l.IsPreview,
+                l.IsPublished,
+                l.DisplayOrder,
+                l.DurationSecs,
+                l.ModuleId,
+                ModuleTitle = m.Title,
+                l.VideoUrl,
+                l.FileUrl,
+                l.Content
             }).ToList()
         )).ToList() : null
     );
@@ -164,12 +172,12 @@ public class CategoriesController(LmsDbContext db) : ControllerBase
     {
         var cat = new Category
         {
-            Name           = req.Name,
-            Description    = req.Description,
-            ParentId       = req.ParentId,
+            Name = req.Name,
+            Description = req.Description,
+            ParentId = req.ParentId,
             OrganizationId = req.OrganizationId,
-            DisplayOrder   = req.DisplayOrder,
-            DepartmentId   = req.DepartmentId
+            DisplayOrder = req.DisplayOrder,
+            DepartmentId = req.DepartmentId
         };
         db.Categories.Add(cat);
         await db.SaveChangesAsync();
@@ -182,10 +190,10 @@ public class CategoriesController(LmsDbContext db) : ControllerBase
     {
         var cat = await db.Categories.FindAsync(id);
         if (cat is null) return NotFound();
-        if (req.Name         is not null) cat.Name         = req.Name;
-        if (req.Description  is not null) cat.Description  = req.Description;
+        if (req.Name is not null) cat.Name = req.Name;
+        if (req.Description is not null) cat.Description = req.Description;
         if (req.DisplayOrder is not null) cat.DisplayOrder = req.DisplayOrder.Value;
-        if (req.IsActive     is not null) cat.IsActive     = req.IsActive.Value;
+        if (req.IsActive is not null) cat.IsActive = req.IsActive.Value;
         await db.SaveChangesAsync();
         return NoContent();
     }
@@ -224,12 +232,23 @@ public class ModulesController(LmsDbContext db) : ControllerBase
             .OrderBy(m => m.DisplayOrder)
             .ToListAsync();
         return Ok(modules.Select(m => new ModuleDto(m.Id, m.Title, m.Description, m.DisplayOrder, m.IsPreview, m.CourseId,
-            m.Lessons.OrderBy(l => l.DisplayOrder).Select(l => (object)new {
-                l.Id, l.Title, l.Description,
-                Type = l.Type.ToString(), l.IsPreview, l.IsPublished,
-                l.DisplayOrder, l.DurationSecs,
-                l.ModuleId, ModuleTitle = m.Title,
-                l.VideoUrl, l.FileUrl, l.Content
+            m.Lessons.OrderBy(l => l.DisplayOrder).Select(l => (object)new
+            {
+                l.Id,
+                l.Title,
+                l.Description,
+                Type = l.Type.ToString(),
+                l.IsPreview,
+                l.IsPublished,
+                l.DisplayOrder,
+                l.DurationSecs,
+                l.ModuleId,
+                ModuleTitle = m.Title,
+                l.VideoUrl,
+                l.FileUrl,
+                l.Content,
+                ContentBlocksCount = string.IsNullOrEmpty(l.ContentBlocksJson) ? 0 :
+                    System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(l.ContentBlocksJson).GetArrayLength()
             }).ToList())));
     }
 
@@ -249,10 +268,10 @@ public class ModulesController(LmsDbContext db) : ControllerBase
     {
         var m = await db.Modules.FindAsync(id);
         if (m is null) return NotFound();
-        if (req.Title        is not null) m.Title        = req.Title;
-        if (req.Description  is not null) m.Description  = req.Description;
+        if (req.Title is not null) m.Title = req.Title;
+        if (req.Description is not null) m.Description = req.Description;
         if (req.DisplayOrder is not null) m.DisplayOrder = req.DisplayOrder.Value;
-        if (req.IsPreview    is not null) m.IsPreview    = req.IsPreview.Value;
+        if (req.IsPreview is not null) m.IsPreview = req.IsPreview.Value;
         await db.SaveChangesAsync();
         return NoContent();
     }

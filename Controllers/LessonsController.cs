@@ -382,6 +382,21 @@ public class LessonsController(LmsDbContext db) : ControllerBase
         {
             enrollment.Status = EnrollmentStatus.Completed;
             enrollment.CompletedAt = DateTime.UtcNow;
+
+            // Auto-issue certificate on course completion
+            var alreadyHasCert = await db.Certificates
+                .AnyAsync(cert => cert.UserId == userId && cert.CourseId == courseId);
+            if (!alreadyHasCert)
+            {
+                db.Certificates.Add(new Certificate
+                {
+                    UserId = userId,
+                    CourseId = courseId,
+                    IssuedAt = DateTime.UtcNow,
+                    TotalWatchMinutes = enrollment.TotalWatchSeconds / 60,
+                    CertificateNumber = Guid.NewGuid().ToString("N")[..12].ToUpper()
+                });
+            }
         }
         await db.SaveChangesAsync();
     }
