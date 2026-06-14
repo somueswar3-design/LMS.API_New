@@ -1,1 +1,68 @@
+name: Deploy LMS API
 
+on:
+push:
+branches:
+- main
+
+jobs:
+deploy:
+runs-on: ubuntu-latest
+
+```
+steps:
+  - name: Checkout
+    uses: actions/checkout@v4
+
+  - name: Setup .NET
+    uses: actions/setup-dotnet@v4
+    with:
+      dotnet-version: '9.0.x'
+
+  - name: Restore
+    run: dotnet restore LMS.API/LMS.API.csproj
+
+  - name: Publish
+    run: |
+      dotnet publish LMS.API/LMS.API.csproj \
+      -c Release \
+      -o publish
+
+  - name: Deploy to Server
+    uses: appleboy/ssh-action@v1.0.3
+    with:
+      host: ${{ secrets.SERVER_HOST }}
+      username: ${{ secrets.SERVER_USER }}
+      key: ${{ secrets.SERVER_SSH_KEY }}
+      script: |
+        mkdir -p /var/www/LMS-API
+        rm -rf /var/www/LMS-API/publish_new
+        mkdir -p /var/www/LMS-API/publish_new
+
+  - name: Copy Publish Files
+    uses: appleboy/scp-action@v0.1.7
+    with:
+      host: ${{ secrets.SERVER_HOST }}
+      username: ${{ secrets.SERVER_USER }}
+      key: ${{ secrets.SERVER_SSH_KEY }}
+      source: "publish/*"
+      target: "/var/www/LMS-API/publish_new"
+
+  - name: Activate Deployment
+    uses: appleboy/ssh-action@v1.0.3
+    with:
+      host: ${{ secrets.SERVER_HOST }}
+      username: ${{ secrets.SERVER_USER }}
+      key: ${{ secrets.SERVER_SSH_KEY }}
+      script: |
+        sudo systemctl stop lms-api || true
+
+        if [ -d /var/www/LMS-API/publish ]; then
+          sudo mv /var/www/LMS-API/publish /var/www/LMS-API/publish_old_$(date +%Y%m%d_%H%M%S)
+        fi
+
+        sudo mv /var/www/LMS-API/publish_new/publish /var/www/LMS-API/publish
+
+        sudo systemctl restart lms-api
+        sudo systemctl status lms-api --no-pager
+```
