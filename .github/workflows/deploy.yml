@@ -1,60 +1,50 @@
 name: Deploy LMS API
 
 on:
-push:
-branches:
-- master
-workflow_dispatch:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
 
 jobs:
-deploy:
-runs-on: ubuntu-latest
+  deploy:
+    runs-on: ubuntu-latest
 
-steps:
-  - name: Checkout Source
-    uses: actions/checkout@v4
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v4
 
-  - name: Setup .NET 8
-    uses: actions/setup-dotnet@v4
-    with:
-      dotnet-version: '8.0.x'
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
 
-  - name: Restore
-    run: dotnet restore LMS.API.csproj
+      - name: Restore
+        run: dotnet restore backend/LMS.API/LMS.API.csproj
 
-  - name: Build
-    run: dotnet build LMS.API.csproj -c Release --no-restore
+      - name: Build
+        run: dotnet build backend/LMS.API/LMS.API.csproj -c Release --no-restore
 
-  - name: Publish
-    run: dotnet publish LMS.API.csproj -c Release -o publish --no-build
+      - name: Publish
+        run: dotnet publish backend/LMS.API/LMS.API.csproj -c Release -o ./publish --no-build
 
-  - name: Prepare Server
-    uses: appleboy/ssh-action@v1.2.0
-    with:
-      host: ${{ secrets.SERVER_HOST }}
-      username: ${{ secrets.SERVER_USER }}
-      key: ${{ secrets.SERVER_SSH_KEY }}
-      script: |
-        mkdir -p /var/www/LMS-API
-        rm -rf /var/www/LMS-API/publish_new
-        mkdir -p /var/www/LMS-API/publish_new
+      - name: Copy to Server via SCP
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          source: "./publish/*"
+          target: "/var/www/LMS-API/publish"
+          strip_components: 1
 
-  - name: Upload Files
-    uses: appleboy/scp-action@v0.1.7
-    with:
-      host: ${{ secrets.SERVER_HOST }}
-      username: ${{ secrets.SERVER_USER }}
-      key: ${{ secrets.SERVER_SSH_KEY }}
-      source: "publish/*"
-      target: "/var/www/LMS-API/publish_new"
-
-  - name: Restart API
-    uses: appleboy/ssh-action@v1.2.0
-    with:
-      host: ${{ secrets.SERVER_HOST }}
-      username: ${{ secrets.SERVER_USER }}
-      key: ${{ secrets.SERVER_SSH_KEY }}
-      script: |
-        sudo systemctl restart lms-api
-        sudo systemctl status lms-api --no-pager
-
+      - name: Restart API Service
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            systemctl restart lms-api
+            sleep 3
+            systemctl status lms-api --no-pager
