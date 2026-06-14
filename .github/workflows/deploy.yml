@@ -23,18 +23,15 @@ jobs:
           dotnet-version: '8.0.x'
 
       - name: Restore
-        working-directory: backend/LMS.API
         run: dotnet restore LMS.API.csproj
 
       - name: Build
-        working-directory: backend/LMS.API
         run: dotnet build LMS.API.csproj -c Release --no-restore
 
       - name: Publish
-        working-directory: backend/LMS.API
-        run: dotnet publish LMS.API.csproj -c Release -o ../../publish --no-build
+        run: dotnet publish LMS.API.csproj -c Release -o ./publish --no-build
 
-      - name: Stop API service before copy
+      - name: Stop API service
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SERVER_HOST }}
@@ -63,5 +60,3 @@ jobs:
             systemctl start lms-api
             sleep 5
             systemctl status lms-api --no-pager
-            echo "---"
-            curl -s -o /dev/null -w "API health: %{http_code}" http://localhost:5000/api/health || echo "API started"
