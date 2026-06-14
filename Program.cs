@@ -20,7 +20,7 @@ Log.Logger = new LoggerConfiguration()
 var builder = WebApplication.CreateBuilder(args);
 builder.Host.UseSerilog();
 
-// ─── Allow large uploads (2 GB) ───────────────────────────────
+// ??? Allow large uploads (2 GB) ???????????????????????????????
 // Kestrel: remove default 30MB body limit
 builder.Services.Configure<KestrelServerOptions>(opt =>
 {
@@ -35,7 +35,7 @@ builder.Services.Configure<IISServerOptions>(opt =>
     opt.MaxRequestBodySize = 2L * 1024 * 1024 * 1024;
 });
 
-// Form options — allow large multipart bodies
+// Form options � allow large multipart bodies
 builder.Services.Configure<FormOptions>(opt =>
 {
     opt.MultipartBodyLengthLimit = 2L * 1024 * 1024 * 1024;
@@ -44,12 +44,12 @@ builder.Services.Configure<FormOptions>(opt =>
     opt.BufferBodyLengthLimit = 2L * 1024 * 1024 * 1024;
 });
 
-// ─── MySQL via Pomelo ──────────────────────────────────────────
+// ??? MySQL via Pomelo ??????????????????????????????????????????
 var conn = builder.Configuration.GetConnectionString("DefaultConnection");
 builder.Services.AddDbContext<LmsDbContext>(opt =>
     opt.UseMySql(conn, ServerVersion.AutoDetect(conn)));
 
-// ─── JWT Auth ─────────────────────────────────────────────────
+// ??? JWT Auth ?????????????????????????????????????????????????
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(opt =>
     {
@@ -100,9 +100,10 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 builder.Services.AddCors(opt =>
-    opt.AddPolicy("AllowFrontend", p =>
-        p.WithOrigins("http://localhost:5173", "http://localhost:3000")
-         .AllowAnyHeader().AllowAnyMethod().AllowCredentials()
+    opt.AddPolicy("AllowAll", policy =>
+        policy.AllowAnyOrigin()
+              .AllowAnyMethod()
+              .AllowAnyHeader()
     )
 );
 
@@ -118,7 +119,7 @@ using (var scope = app.Services.CreateScope())
 app.UseSwagger();
 app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "LMS API v1"));
 app.UseSerilogRequestLogging();
-app.UseCors("AllowFrontend");
+app.UseCors("AllowAll");
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

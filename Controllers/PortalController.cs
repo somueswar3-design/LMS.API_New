@@ -20,8 +20,33 @@ public class PortalController(LmsDbContext db) : ControllerBase
         if (string.IsNullOrWhiteSpace(url))
             return BadRequest(new { message = "url parameter is required" });
 
-        // Normalise: strip trailing slash, lower-case
-        var normalised = url.TrimEnd('/').ToLowerInvariant();
+        // ── Local dev bypass ─────────────────────────────────────────────────
+        // If running on localhost (any port), skip URL matching and return the
+        // first active organization so developers don't need to update PortalUrl.
+        var host = url.TrimEnd('/').ToLowerInvariant();
+        var isLocalhost = host.StartsWith("http://localhost") ||
+                          host.StartsWith("http://127.0.0.1") ||
+                          host.StartsWith("https://localhost") ||
+                          host.StartsWith("https://127.0.0.1");
+
+        if (isLocalhost)
+        {
+            var devOrg = await db.Organizations
+                .Where(o => o.IsActive)
+                .Select(o => new OrgThemeDto(
+                    o.Id, o.Name, o.Slug, o.LogoUrl, o.BannerUrl, o.Tagline,
+                    o.PrimaryColor, o.SecondaryColor, o.AccentColor,
+                    o.ThemeFont, o.Website, o.PortalUrl))
+                .FirstOrDefaultAsync();
+
+            if (devOrg is null)
+                return NotFound(new { authorized = false, message = "No active organization found." });
+
+            return Ok(new { authorized = true, organization = devOrg });
+        }
+
+        // ── Production: match URL against PortalUrl in DB ────────────────────
+        var normalised = host;
 
         var org = await db.Organizations
             .Where(o => o.IsActive &&
@@ -144,8 +169,8 @@ public class PortalController(LmsDbContext db) : ControllerBase
     {
         return Ok(new
         {
-            totalCourses     = await db.Courses.CountAsync(c => c.OrganizationId == orgId && c.Status == CourseStatus.Published),
-            totalStudents    = await db.Users.CountAsync(u => u.OrganizationId == orgId && u.Role == UserRole.Student),
+            totalCourses = await db.Courses.CountAsync(c => c.OrganizationId == orgId && c.Status == CourseStatus.Published),
+            totalStudents = await db.Users.CountAsync(u => u.OrganizationId == orgId && u.Role == UserRole.Student),
             totalInstructors = await db.Users.CountAsync(u => u.OrganizationId == orgId && u.Role == UserRole.Instructor),
             totalEnrollments = await db.Enrollments.CountAsync(e => e.Course.OrganizationId == orgId)
         });
