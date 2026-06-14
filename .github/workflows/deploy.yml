@@ -6,7 +6,7 @@ branches:
 - master
 workflow_dispatch:
 
-jobs:  
+jobs:
 deploy:
 runs-on: ubuntu-latest
 
@@ -20,7 +20,7 @@ steps:
     with:
       dotnet-version: '8.0.x'
 
-  - name: Restore Packages
+  - name: Restore
     run: dotnet restore LMS.API.csproj
 
   - name: Build
@@ -29,7 +29,7 @@ steps:
   - name: Publish
     run: dotnet publish LMS.API.csproj -c Release -o publish --no-build
 
-  - name: Prepare Deployment Folder
+  - name: Prepare Server
     uses: appleboy/ssh-action@v1.2.0
     with:
       host: ${{ secrets.SERVER_HOST }}
@@ -49,26 +49,13 @@ steps:
       source: "publish/*"
       target: "/var/www/LMS-API/publish_new"
 
-  - name: Activate Deployment
+  - name: Restart API
     uses: appleboy/ssh-action@v1.2.0
     with:
       host: ${{ secrets.SERVER_HOST }}
       username: ${{ secrets.SERVER_USER }}
       key: ${{ secrets.SERVER_SSH_KEY }}
       script: |
-        sudo systemctl stop lms-api || true
-
-        if [ -d /var/www/LMS-API/publish ]; then
-          sudo mv /var/www/LMS-API/publish /var/www/LMS-API/publish_old_$(date +%Y%m%d_%H%M%S)
-        fi
-
-        sudo mkdir -p /var/www/LMS-API/publish
-
-        sudo cp -R /var/www/LMS-API/publish_new/* /var/www/LMS-API/publish/
-
         sudo systemctl restart lms-api
-
-        sleep 10
-
         sudo systemctl status lms-api --no-pager
 ```
