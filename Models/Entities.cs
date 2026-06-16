@@ -23,8 +23,8 @@ public class Organization
     public string? RazorpayKeySecret { get; set; }
     public string? Currency { get; set; } = "INR";
     // Certificate signature
-    public string? SignatureUrl { get; set; }   // uploaded signature image
-    public string? AuthorizedBy { get; set; }   // e.g. "Dr. Rajesh Menon, CEO"
+    public string? SignatureUrl    { get; set; }   // uploaded signature image
+    public string? AuthorizedBy    { get; set; }   // e.g. "Dr. Rajesh Menon, CEO"
     public string? AuthorizedTitle { get; set; }   // e.g. "Chief Executive Officer" 
 
     public ICollection<User> Users { get; set; } = [];
@@ -321,7 +321,7 @@ public enum OrderStatus { Pending, Paid, Failed, Refunded }
 public class Order
 {
     public int Id { get; set; }
-    public string OrderNumber { get; set; } = $"ORD{DateTime.UtcNow:yyyyMMddHHmmss}{Random.Shared.Next(100, 999)}";
+    public string OrderNumber { get; set; } = $"ORD{DateTime.UtcNow:yyyyMMddHHmmss}{Random.Shared.Next(100,999)}";
     public decimal TotalAmount { get; set; }
     public string Currency { get; set; } = "INR";
     public OrderStatus Status { get; set; } = OrderStatus.Pending;
@@ -437,28 +437,28 @@ public enum PaymentMethod { UPI, Card, NetBanking, Wallet, EMI, Unknown }
 public class PaymentTransaction
 {
     public int Id { get; set; }
-    public string TransactionRef { get; set; } = Guid.NewGuid().ToString("N")[..16].ToUpper();
-    public string? RazorpayOrderId { get; set; }
+    public string TransactionRef    { get; set; } = Guid.NewGuid().ToString("N")[..16].ToUpper();
+    public string? RazorpayOrderId  { get; set; }
     public string? RazorpayPaymentId { get; set; }
     public string? RazorpaySignature { get; set; }
-    public decimal Amount { get; set; }
-    public string Currency { get; set; } = "INR";
+    public decimal Amount           { get; set; }
+    public string Currency          { get; set; } = "INR";
     public PaymentTransactionStatus Status { get; set; } = PaymentTransactionStatus.Initiated;
-    public PaymentMethod Method { get; set; } = PaymentMethod.Unknown;
-    public string? MethodDetail { get; set; }  // e.g. "HDFC Debit Card", "GPay"
-    public string? FailureReason { get; set; }
-    public string? RefundId { get; set; }
-    public decimal? RefundAmount { get; set; }
-    public DateTime? RefundedAt { get; set; }
-    public string? IpAddress { get; set; }
-    public string? UserAgent { get; set; }
-    public string? WebhookPayload { get; set; }  // raw webhook JSON for audit
-    public DateTime InitiatedAt { get; set; } = DateTime.UtcNow;
-    public DateTime? CompletedAt { get; set; }
-    public int UserId { get; set; }
-    public User User { get; set; } = null!;
-    public int? OrderId { get; set; }
-    public Order? Order { get; set; }
+    public PaymentMethod Method     { get; set; } = PaymentMethod.Unknown;
+    public string? MethodDetail     { get; set; }  // e.g. "HDFC Debit Card", "GPay"
+    public string? FailureReason    { get; set; }
+    public string? RefundId         { get; set; }
+    public decimal? RefundAmount    { get; set; }
+    public DateTime? RefundedAt     { get; set; }
+    public string? IpAddress        { get; set; }
+    public string? UserAgent        { get; set; }
+    public string? WebhookPayload   { get; set; }  // raw webhook JSON for audit
+    public DateTime InitiatedAt     { get; set; } = DateTime.UtcNow;
+    public DateTime? CompletedAt    { get; set; }
+    public int UserId               { get; set; }
+    public User User                { get; set; } = null!;
+    public int? OrderId             { get; set; }
+    public Order? Order             { get; set; }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -731,3 +731,51 @@ public class BatchResource
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
+
+// ─── TRAINING BATCH ───────────────────────────────────────────
+public enum BatchStatus { Active, Completed, Cancelled, Upcoming }
+public enum BatchStudentStatus { Active, Dropped, Completed }
+public enum PaymentStatus { Free, FullyPaid, PartiallyPaid, Pending }
+
+public class TrainingBatch
+{
+    public int Id { get; set; }
+    [Required, MaxLength(200)] public string BatchName { get; set; } = "";
+    public string? Description { get; set; }
+    public DateTime StartDate { get; set; }
+    public int DurationDays { get; set; } = 30;
+    public DateTime EndDate => StartDate.AddDays(DurationDays);
+    public BatchStatus Status { get; set; } = BatchStatus.Upcoming;
+    public decimal TotalFee { get; set; } = 0;
+    public string? Notes { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public int OrganizationId { get; set; }
+    public Organization Organization { get; set; } = null!;
+    public int? CourseId { get; set; }
+    public Course? Course { get; set; }
+    public int CreatedById { get; set; }
+    public User CreatedBy { get; set; } = null!;
+    public ICollection<BatchStudent> Students { get; set; } = [];
+}
+
+public class BatchStudent
+{
+    public int Id { get; set; }
+    public int BatchId { get; set; }
+    public TrainingBatch Batch { get; set; } = null!;
+    // Existing user (nullable — guest students won't have a user account)
+    public int? UserId { get; set; }
+    public User? User { get; set; }
+    // Guest student info
+    public string? GuestName { get; set; }
+    public string? GuestEmail { get; set; }
+    public string? GuestMobile { get; set; }
+    // Payment
+    public decimal TotalFee { get; set; } = 0;
+    public decimal PaidAmount { get; set; } = 0;
+    public decimal PendingAmount => TotalFee - PaidAmount;
+    public PaymentStatus PaymentStatus { get; set; } = PaymentStatus.Pending;
+    public BatchStudentStatus Status { get; set; } = BatchStudentStatus.Active;
+    public DateTime JoinedAt { get; set; } = DateTime.UtcNow;
+    public string? Notes { get; set; }
+}
