@@ -12,8 +12,18 @@ namespace LMS.API.Controllers;
 //  ENROLLMENTS
 // ═══════════════════════════════════════════════════════════════
 [ApiController, Route("api/enrollments"), Authorize]
-public class EnrollmentsController(LmsDbContext db) : ControllerBase
+public class EnrollmentsController : ControllerBase
 {
+    private readonly LmsDbContext db;
+    private readonly IAuthService auth;
+    private readonly IEmailService emailService;
+
+    public EnrollmentsController(LmsDbContext db, IAuthService auth, IEmailService emailService)
+    {
+        this.db = db;
+        this.auth = auth;
+        this.emailService = emailService;
+    }
     [HttpGet("user/{userId}")]
     public async Task<IActionResult> GetByUser(int userId)
     {
@@ -36,20 +46,54 @@ public class EnrollmentsController(LmsDbContext db) : ControllerBase
         return Ok(new PagedResult<EnrollmentDto>(items.Select(MapEnrollment).ToList(), total, page, size, (int)Math.Ceiling(total / (double)size)));
     }
 
+    //{ [HttpPost]
+    // public async Task<IActionResult> Enroll([FromBody] EnrollRequest req)
+    // {
+    //     user = await db.Users.Include(u => u.Organization).FirstAsync(u => u.Id == user.Id);
+    //     await emailService.SendWelcomeEmailAsync(user.Email, user.FirstName, org.Name);
+    //     return Ok(new LoginResponse(auth.GenerateJwt(user), auth.GenerateRefreshToken(), MapUser(user)));
+    //     if (await db.Enrollments.AnyAsync(e => e.UserId == req.UserId && e.CourseId == req.CourseId))
+    //         return BadRequest(new { message = "Already enrolled" });
+
+    //     var course = await db.Courses.FindAsync(req.CourseId);
+    //     if (course is null) return NotFound();
+
+    //     var enrollment = new Enrollment { UserId = req.UserId, CourseId = req.CourseId };
+    //     db.Enrollments.Add(enrollment);
+    //     await db.SaveChangesAsync();
+    //     return Ok(new { enrollment.Id });
+    // }
     [HttpPost]
     public async Task<IActionResult> Enroll([FromBody] EnrollRequest req)
     {
+        // Check if already enrolled
         if (await db.Enrollments.AnyAsync(e => e.UserId == req.UserId && e.CourseId == req.CourseId))
             return BadRequest(new { message = "Already enrolled" });
 
+        // Validate course
         var course = await db.Courses.FindAsync(req.CourseId);
-        if (course is null) return NotFound();
+        if (course is null) return NotFound(new { message = "Course not found" });
 
+        // Validate user
+        var user = await db.Users.Include(u => u.Organization).FirstOrDefaultAsync(u => u.Id == req.UserId);
+        if (user is null) return NotFound(new { message = "User not found" });
+
+        // Create enrollment
         var enrollment = new Enrollment { UserId = req.UserId, CourseId = req.CourseId };
         db.Enrollments.Add(enrollment);
         await db.SaveChangesAsync();
-        return Ok(new { enrollment.Id });
+
+        // Send welcome email
+        await emailService.SendWelcomeEmailAsync(user.Email, user.FirstName, user.Organization?.Name ?? "Your Organization");
+
+        // Return login response (or enrollment info depending on your flow)
+        return Ok(new LoginResponse(
+            auth.GenerateJwt(user),
+            auth.GenerateRefreshToken(),
+            MapUser(user)
+        ));
     }
+
 
     [HttpDelete("{id}")]
     public async Task<IActionResult> Unenroll(int id)
@@ -65,6 +109,12 @@ public class EnrollmentsController(LmsDbContext db) : ControllerBase
         e.Id, e.UserId, $"{e.User.FirstName} {e.User.LastName}",
         e.CourseId, e.Course.Title, e.EnrolledAt, e.CompletedAt,
         e.Status.ToString(), e.ProgressPercent
+    );
+
+    static UserDto MapUser(User u) => new(
+        u.Id, u.FirstName, u.LastName, u.Email, u.AvatarUrl,
+        u.Role.ToString(), u.IsActive, u.CreatedAt, u.LastLogin,
+        u.OrganizationId, u.Organization?.Name ?? ""
     );
 }
 

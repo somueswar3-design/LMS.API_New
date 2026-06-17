@@ -57,7 +57,7 @@ public class AuthController(LmsDbContext db, IAuthService auth, IEmailService em
         await db.SaveChangesAsync();
 
         user = await db.Users.Include(u => u.Organization).FirstAsync(u => u.Id == user.Id);
-        _ = emailService.SendWelcomeEmailAsync(user.Email, user.FirstName, org.Name);
+        await emailService.SendWelcomeEmailAsync(user.Email, user.FirstName, org.Name);
         return Ok(new LoginResponse(auth.GenerateJwt(user), auth.GenerateRefreshToken(), MapUser(user)));
     }
 
