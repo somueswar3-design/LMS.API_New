@@ -11,22 +11,27 @@ namespace LMS.API.Controllers;
 [ApiController, Route("api/assignments"), Authorize]
 public class AssignmentsController(LmsDbContext db, IEmailService email) : ControllerBase
 {
-    // ─── Trainer: list assignments for a course ────────────────
     [HttpGet("course/{courseId}")]
     public async Task<IActionResult> GetByCourse(int courseId)
     {
-        var list = await db.Assignments
+        var query = db.Assignments
             .Include(a => a.CreatedBy)
             .Include(a => a.Course)
             .Include(a => a.Submissions)
-            .Where(a => a.CourseId == courseId)
+            .AsQueryable();
+
+        // If frontend sends 0, this block is skipped entirely, returning all rows
+        if (courseId > 0)
+        {
+            query = query.Where(a => a.CourseId == courseId);
+        }
+
+        var list = await query
             .OrderByDescending(a => a.CreatedAt)
             .ToListAsync();
 
         return Ok(list.Select(a => MapAssignment(a, null)));
-    }
-
-    // ─── Student: my assignments ───────────────────────────────
+    }// ─── Student: my assignments ───────────────────────────────
     [HttpGet("student/{studentId}")]
     public async Task<IActionResult> GetForStudent(int studentId)
     {
@@ -63,26 +68,46 @@ public class AssignmentsController(LmsDbContext db, IEmailService email) : Contr
     {
         var a = new Assignment
         {
-            Title       = req.Title, Description = req.Description,
-            AttachmentUrl = req.AttachmentUrl, MaxMarks = req.MaxMarks,
-            DueDate     = req.DueDate, CourseId = req.CourseId,
-            CreatedById = req.CreatedById, Status = AssignmentStatus.Published
+            Title = req.Title,
+            Description = req.Description,
+            AttachmentUrl = req.AttachmentUrl,
+            MaxMarks = req.MaxMarks,
+            DueDate = req.DueDate,
+            CourseId = req.CourseId,
+            CreatedById = req.CreatedById,
+            Status = AssignmentStatus.Published
         };
         db.Assignments.Add(a);
         await db.SaveChangesAsync();
 
-        // Notify enrolled students
-        var students = await db.Enrollments
-            .Include(e => e.User)
-            .Where(e => e.CourseId == req.CourseId && e.Status == EnrollmentStatus.Active)
-            .Select(e => e.User).ToListAsync();
-        var course = await db.Courses.FindAsync(req.CourseId);
-        foreach (var s in students)
-            _ = email.SendAssignmentNotificationAsync(s.Email, s.FirstName, req.Title, req.DueDate, course?.Title ?? "");
+        try
+        {
+            // 1. Fetch the data completely while the DbContext is safely open
+            var students = await db.Enrollments
+                .Include(e => e.User)
+                .Where(e => e.CourseId == req.CourseId && e.Status == EnrollmentStatus.Active)
+                .Select(e => e.User).ToListAsync();
+
+            var course = await db.Courses.FindAsync(req.CourseId);
+            string courseTitle = course?.Title ?? "";
+
+            // 2. Safely await each email background task explicitly
+            foreach (var s in students)
+            {
+                if (!string.IsNullOrEmpty(s.Email))
+                {
+                    await email.SendAssignmentNotificationAsync(s.Email, s.FirstName, req.Title, req.DueDate, courseTitle);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            // Keeps your app running safely if your email service has a glitch
+            Console.WriteLine($"Notification Engine Exception: {ex.Message}");
+        }
 
         return Ok(new { a.Id });
     }
-
     [HttpPut("{id}")]
     [Authorize(Roles = "SuperAdmin,OrgAdmin,Instructor")]
     public async Task<IActionResult> Update(int id, [FromBody] CreateAssignmentRequest req)
@@ -144,22 +169,29 @@ public class AssignmentsController(LmsDbContext db, IEmailService email) : Contr
         if (sub is null) return NotFound();
 
         sub.MarksObtained = req.MarksObtained;
-        sub.Feedback      = req.Feedback;
-        sub.GradedById    = req.GradedById;
-        sub.GradedAt      = DateTime.UtcNow;
-        sub.Status        = SubmissionStatus.Graded;
+        sub.Feedback = req.Feedback;
+        sub.GradedById = req.GradedById;
+        sub.GradedAt = DateTime.UtcNow;
+        sub.Status = SubmissionStatus.Graded;
         await db.SaveChangesAsync();
 
-        // Notify student
-        _ = email.SendGradeNotificationAsync(
-            sub.Student.Email, sub.Student.FirstName,
-            sub.Assignment.Title, req.MarksObtained,
-            sub.Assignment.MaxMarks, req.Feedback ?? "",
-            sub.Assignment.Course.Title
-        );
+        try
+        {
+            // Await the email task instead of using discard (_ =)
+            await email.SendGradeNotificationAsync(
+                sub.Student.Email, sub.Student.FirstName,
+                sub.Assignment.Title, req.MarksObtained,
+                sub.Assignment.MaxMarks, req.Feedback ?? "",
+                sub.Assignment.Course.Title
+            );
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Grading email notification failed: {ex.Message}");
+        }
+
         return Ok(new { sub.MarksObtained, sub.Feedback });
     }
-
     // ─── Trainer: all submissions for an assignment ────────────
     [HttpGet("{id}/submissions")]
     [Authorize(Roles = "SuperAdmin,OrgAdmin,Instructor")]
