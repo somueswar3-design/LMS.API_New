@@ -23,7 +23,9 @@ public record OrganizationDto(
     string? AboutUsContent = null, string? ContactEmail = null,
     string? ContactPhone = null, string? ContactAddress = null,
     string? ContactMapEmbed = null, string? OpeningsContent = null,
-    string? CustomMenuJson = null
+    string? CustomMenuJson = null,
+    // Template selection
+    string? AboutUsTemplate = "classic", string? ContactUsTemplate = "classic"
 );
 public record CreateOrganizationRequest(string Name, string? Website, string? PrimaryColor, string? PortalUrl);
 public record UpdateOrganizationRequest(
@@ -40,7 +42,9 @@ public record UpdateOrganizationRequest(
     string? AboutUsContent = null, string? ContactEmail = null,
     string? ContactPhone = null, string? ContactAddress = null,
     string? ContactMapEmbed = null, string? OpeningsContent = null,
-    string? CustomMenuJson = null
+    string? CustomMenuJson = null,
+    // Template selection
+    string? AboutUsTemplate = null, string? ContactUsTemplate = null
 );
 
 // ─── USER ──────────────────────────────────────────────────────────────────────

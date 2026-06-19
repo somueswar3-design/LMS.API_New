@@ -61,6 +61,8 @@ public class Organization
     public string? ContactMapEmbed { get; set; }   // Google Maps iframe src
     public string? OpeningsContent { get; set; }   // HTML
     public string? CustomMenuJson { get; set; }   // JSON array [{label,url,isPage,pageContent}]
+    public string? AboutUsTemplate { get; set; } = "classic";   // classic | split | timeline | card
+    public string? ContactUsTemplate { get; set; } = "classic";   // classic | split | minimal | map-focus
 
     // Navigation
     public ICollection<User> Users { get; set; } = [];

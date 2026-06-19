@@ -91,6 +91,8 @@ public class OrganizationsController(LmsDbContext db) : ControllerBase
         if (req.ContactMapEmbed is not null) org.ContactMapEmbed = req.ContactMapEmbed;
         if (req.OpeningsContent is not null) org.OpeningsContent = req.OpeningsContent;
         if (req.CustomMenuJson is not null) org.CustomMenuJson = req.CustomMenuJson;
+        if (req.AboutUsTemplate is not null) org.AboutUsTemplate = req.AboutUsTemplate;
+        if (req.ContactUsTemplate is not null) org.ContactUsTemplate = req.ContactUsTemplate;
 
         await db.SaveChangesAsync();
         return NoContent();
@@ -120,6 +122,7 @@ public class OrganizationsController(LmsDbContext db) : ControllerBase
         // Content
         o.AboutUsContent, o.ContactEmail, o.ContactPhone,
         o.ContactAddress, o.ContactMapEmbed, o.OpeningsContent,
-        o.CustomMenuJson
+        o.CustomMenuJson,
+        o.AboutUsTemplate, o.ContactUsTemplate
     );
 }

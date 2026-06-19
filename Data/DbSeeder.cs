@@ -889,6 +889,41 @@ public static class DbSeeder
                                    "(NotSubmitted, Submitted, Graded, ResubmitRequested, Late).");
             }
         }
+        // ════════════════════════════════════════════════════════════════════════════
+        // SEED — Sample About Us / Contact Us content + template selection
+        // Paste inside DbSeeder.cs after the Organization is created.
+        // ════════════════════════════════════════════════════════════════════════════
+
+        var orgToUpdate = db.Organizations.First();
+        if (string.IsNullOrEmpty(orgToUpdate.AboutUsContent))
+        {
+            orgToUpdate.ShowAboutUs = true;
+            orgToUpdate.AboutUsTemplate = "split";   // try: classic | split | timeline | card
+            orgToUpdate.AboutUsContent =
+                "<p>Founded with a mission to make quality education accessible to everyone, " +
+                "<strong>" + orgToUpdate.Name + "</strong> has trained thousands of students across " +
+                "technology, design, and business domains.</p>" +
+                "<p>Our instructors are industry practitioners who bring real-world project experience " +
+                "into every classroom session.</p>" +
+                "<p>We combine structured curriculum with hands-on mentorship to ensure every student " +
+                "is job-ready by the time they graduate.</p>";
+
+            orgToUpdate.ShowContactUs = true;
+            orgToUpdate.ContactUsTemplate = "classic";  // try: classic | split | minimal | map-focus
+            orgToUpdate.ContactEmail = "info@" + orgToUpdate.Slug + ".com";
+            orgToUpdate.ContactPhone = "+91 98765 43210";
+            orgToUpdate.ContactAddress = "3rd Floor, Tech Park,\nWhitefield, Bengaluru,\nKarnataka 560066";
+            orgToUpdate.ContactMapEmbed = "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3888.9!2d77.7499!3d12.9698!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zMTLCsDU4JzExLjMiTiA3N8KwNDQnNTkuNiJF!5e0!3m2!1sen!2sin!4v1";
+
+            orgToUpdate.ShowScrollingBanner = true;
+            orgToUpdate.ScrollingBannerText = "🎉 New Batch Starting Soon | Limited Seats Available | Enroll Today";
+
+            orgToUpdate.ShowReferralOffer = true;
+            orgToUpdate.ReferralOfferText = "Earn ₹2,500 for every friend who enrolls!";
+
+            db.SaveChanges();
+            Console.WriteLine("Seeded About Us / Contact Us content + templates for " + orgToUpdate.Name);
+        }
     }
 
 }
