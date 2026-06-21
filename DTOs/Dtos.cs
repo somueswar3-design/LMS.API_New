@@ -69,10 +69,11 @@ public record CourseDto(
     int? CategoryId, string? CategoryName,
     int EnrollmentCount, double AverageRating, int RatingCount,
     DateTime CreatedAt, DateTime UpdatedAt,
-    List<ModuleDto>? Modules
+    List<ModuleDto>? Modules,
+    bool EnforceSequentialLessons = false
 );
-public record CreateCourseRequest(string Title, string? Description, string? ThumbnailUrl, string Level, decimal Price, bool IsFree, int CategoryId, int InstructorId, int OrganizationId, string? Tags, string? Language = "English");
-public record UpdateCourseRequest(string? Title, string? Description, string? ThumbnailUrl, string? Level, string? Status, decimal? Price, bool? IsFree, int? CategoryId, string? Tags);
+public record CreateCourseRequest(string Title, string? Description, string? ThumbnailUrl, string Level, decimal Price, bool IsFree, int CategoryId, int InstructorId, int OrganizationId, string? Tags, string? Language = "English", bool EnforceSequentialLessons = false);
+public record UpdateCourseRequest(string? Title, string? Description, string? ThumbnailUrl, string? Level, string? Status, decimal? Price, bool? IsFree, int? CategoryId, string? Tags, bool? EnforceSequentialLessons = null);
 
 // ─── MODULE ────────────────────────────────────────────────────────────────────
 public record ModuleDto(int Id, string Title, string? Description, int DisplayOrder, bool IsPreview, int CourseId, List<object>? Lessons);

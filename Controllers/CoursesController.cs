@@ -75,7 +75,8 @@ public class CoursesController(LmsDbContext db) : ControllerBase
             InstructorId = req.InstructorId,
             OrganizationId = req.OrganizationId,
             Tags = req.Tags,
-            Language = req.Language
+            Language = req.Language,
+            EnforceSequentialLessons = req.EnforceSequentialLessons
         };
         db.Courses.Add(course);
         await db.SaveChangesAsync();
@@ -98,6 +99,7 @@ public class CoursesController(LmsDbContext db) : ControllerBase
         if (req.IsFree is not null) course.IsFree = req.IsFree.Value;
         if (req.CategoryId is not null) course.CategoryId = req.CategoryId.Value;
         if (req.Tags is not null) course.Tags = req.Tags;
+        if (req.EnforceSequentialLessons is not null) course.EnforceSequentialLessons = req.EnforceSequentialLessons.Value;
         course.UpdatedAt = DateTime.UtcNow;
 
         await db.SaveChangesAsync();
@@ -144,7 +146,8 @@ public class CoursesController(LmsDbContext db) : ControllerBase
                 l.FileUrl,
                 l.Content
             }).ToList()
-        )).ToList() : null
+        )).ToList() : null,
+        c.EnforceSequentialLessons
     );
 }
 

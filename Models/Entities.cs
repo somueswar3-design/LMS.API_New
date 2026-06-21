@@ -180,6 +180,11 @@ public class Course
     public Category? Category { get; set; }
     public int? InstructorId { get; set; }
     public User? Instructor { get; set; }
+    // When true, students must complete each lesson (reach the watch-time
+    // threshold) before the next lesson in sequence becomes playable. Set
+    // once per course at creation/edit time — not a per-module or
+    // org-wide setting.
+    public bool EnforceSequentialLessons { get; set; } = false;
     public ICollection<Module> Modules { get; set; } = [];
     public ICollection<Enrollment> Enrollments { get; set; } = [];
     public ICollection<CourseRating> Ratings { get; set; } = [];
