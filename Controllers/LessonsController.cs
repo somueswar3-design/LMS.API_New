@@ -258,6 +258,13 @@ public class LessonsController(LmsDbContext db) : ControllerBase
     }
 
     // ─── Progress ─────────────────────────────────────────────
+    // req.WatchedSeconds is the SECONDS WATCHED SINCE THE LAST SAVE (a
+    // delta), not a running total. The frontend resets its own counter to 0
+    // each time a lesson opens (so Next/Prev navigation can't mix one
+    // lesson's time into another's), then sends small periodic deltas as
+    // it plays. The backend's job is simply to add each delta onto
+    // WatchedSeconds, so multiple separate viewing sessions accumulate
+    // correctly instead of the latest session overwriting earlier ones.
     [HttpPost("progress")]
     public async Task<IActionResult> UpdateProgress([FromBody] UpdateProgressRequest req)
     {
@@ -269,9 +276,10 @@ public class LessonsController(LmsDbContext db) : ControllerBase
             lp = new LessonProgress { UserId = userId, LessonId = req.LessonId };
             db.LessonProgresses.Add(lp);
         }
-        lp.WatchedSeconds = req.WatchedSeconds;
+
+        lp.WatchedSeconds += Math.Max(0, req.WatchedSeconds);
         lp.LastPositionSec = req.LastPositionSec;
-        lp.IsCompleted = req.IsCompleted;
+        lp.IsCompleted = lp.IsCompleted || req.IsCompleted; // never un-complete a lesson
         lp.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
 

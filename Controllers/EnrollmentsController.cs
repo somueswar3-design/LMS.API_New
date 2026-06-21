@@ -64,7 +64,7 @@ public class EnrollmentsController(LmsDbContext db) : ControllerBase
     static EnrollmentDto MapEnrollment(Enrollment e) => new(
         e.Id, e.UserId, $"{e.User.FirstName} {e.User.LastName}",
         e.CourseId, e.Course.Title, e.EnrolledAt, e.CompletedAt,
-        e.Status.ToString(), e.ProgressPercent
+        e.Status.ToString(), e.ProgressPercent, e.TotalWatchSeconds
     );
 }
 
@@ -333,4 +333,3 @@ public class CertificatesController(LmsDbContext db) : ControllerBase
         );
     }
 }
-
