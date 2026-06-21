@@ -20,22 +20,33 @@ public class CloudflareService(IConfiguration config, ILogger<CloudflareService>
 {
     readonly string _accessKey = config["CloudflareR2:AccessKeyId"]!;
     readonly string _secretKey = config["CloudflareR2:SecretAccessKey"]!;
-    readonly string _bucket    = config["CloudflareR2:BucketName"]!;
+    readonly string _bucket = config["CloudflareR2:BucketName"]!;
     readonly string _publicUrl = config["CloudflareR2:PublicUrl"]!;
-    readonly string _endpoint  = config["CloudflareR2:Endpoint"]!;
+    readonly string _endpoint = config["CloudflareR2:Endpoint"]!;
 
     static readonly string[] ImageExts = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"];
     static readonly string[] VideoExts = [".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v"];
+
+    // Reused across requests — AmazonS3Client is thread-safe and expensive
+    // to construct repeatedly (each call re-resolves credentials/endpoint).
+    static readonly Lazy<AmazonS3Client> _sharedClient = new(() => new AmazonS3Client(
+        new BasicAWSCredentials(
+            Environment.GetEnvironmentVariable("R2_ACCESS_KEY") ?? "",
+            Environment.GetEnvironmentVariable("R2_SECRET_KEY") ?? ""
+        ),
+        new AmazonS3Config { ForcePathStyle = true, SignatureVersion = "4" }
+    ));
 
     AmazonS3Client CreateClient() => new(
         new BasicAWSCredentials(_accessKey, _secretKey),
         new AmazonS3Config
         {
-            ServiceURL     = _endpoint,
+            ServiceURL = _endpoint,
             ForcePathStyle = true,
             SignatureVersion = "4",
-            // Note: UseChunkedEncoding is set per-request on PutObjectRequest,
-            // not on AmazonS3Config in newer SDK versions
+            // Generous timeouts for large video uploads on slower connections
+            Timeout = TimeSpan.FromMinutes(30),
+            MaxErrorRetry = 3,
         }
     );
 
@@ -58,6 +69,14 @@ public class CloudflareService(IConfiguration config, ILogger<CloudflareService>
     public Task<UploadResult> UploadFileAsync(IFormFile file, string folder)
         => UploadAsync(file, folder);
 
+    // ── Threshold for switching to multipart upload ──────────────────────
+    // Anything at or above 25MB uses multipart streaming — this is much
+    // lower than the old 100MB cutoff. Multipart streams directly from the
+    // incoming request to R2 in chunks, so the server never has to hold the
+    // entire file in RAM, and upload to R2 starts almost immediately instead
+    // of waiting for the whole file to land on disk/memory first.
+    const long MultipartThresholdBytes = 25L * 1024 * 1024;
+
     async Task<UploadResult> UploadAsync(IFormFile file, string folder, bool isLargeFile = false)
     {
         var ext = Path.GetExtension(file.FileName).ToLower();
@@ -67,55 +86,68 @@ public class CloudflareService(IConfiguration config, ILogger<CloudflareService>
         {
             using var client = CreateClient();
 
-            // Videos > 100MB: use multipart upload (bypasses RAM loading)
-            if (isLargeFile && file.Length > 100 * 1024 * 1024)
+            if (file.Length >= MultipartThresholdBytes)
             {
-                logger.LogInformation("Starting multipart upload for {Name} ({Size}MB)",
-                    file.FileName, file.Length / 1024 / 1024);
+                logger.LogInformation("Starting multipart upload for {Name} ({SizeMB:F1}MB)",
+                    file.FileName, file.Length / 1024.0 / 1024.0);
 
                 var transfer = new TransferUtility(client);
+
+                // Stream directly from the request body — no intermediate
+                // MemoryStream, no buffering the whole file before any
+                // bytes reach R2. This is what makes large uploads fast.
+                await using var stream = file.OpenReadStream();
+
                 var uploadReq = new TransferUtilityUploadRequest
                 {
-                    BucketName  = _bucket,
-                    Key         = key,
-                    ContentType = file.ContentType ?? "video/mp4",
-                    CannedACL   = S3CannedACL.PublicRead,
-                    InputStream = file.OpenReadStream(),
-                    // 50 MB per part — R2 supports up to 10,000 parts
-                    PartSize    = 50 * 1024 * 1024,
-                    AutoCloseStream = true,
+                    BucketName = _bucket,
+                    Key = key,
+                    ContentType = file.ContentType ?? "application/octet-stream",
+                    CannedACL = S3CannedACL.PublicRead,
+                    InputStream = stream,
+                    // 10MB parts uploaded in parallel — good balance between
+                    // throughput and memory use. R2 supports up to 10,000 parts.
+                    PartSize = 10 * 1024 * 1024,
+                    AutoCloseStream = false, // we own the stream's lifetime via `using`
                 };
 
+                var lastLoggedPct = -10;
                 uploadReq.UploadProgressEvent += (_, e) =>
-                    logger.LogInformation("Upload progress: {Pct}% ({MB}MB of {TotalMB}MB)",
-                        e.PercentDone, e.TransferredBytes / 1024 / 1024, e.TotalBytes / 1024 / 1024);
+                {
+                    // Throttle logging to every ~10% to avoid log spam on large files
+                    if (e.PercentDone - lastLoggedPct >= 10)
+                    {
+                        lastLoggedPct = e.PercentDone;
+                        logger.LogInformation("Upload progress for {Name}: {Pct}% ({MB:F0}MB of {TotalMB:F0}MB)",
+                            file.FileName, e.PercentDone,
+                            e.TransferredBytes / 1024.0 / 1024.0,
+                            e.TotalBytes / 1024.0 / 1024.0);
+                    }
+                };
 
                 await transfer.UploadAsync(uploadReq);
             }
             else
             {
-                // Small/medium files: read into MemoryStream (R2 needs Content-Length)
-                using var ms = new MemoryStream((int)Math.Min(file.Length, int.MaxValue));
-                await file.CopyToAsync(ms);
-                ms.Position = 0;
+                // Small files only (< 25MB) — direct PutObject is simpler
+                // and faster than multipart for small payloads.
+                await using var stream = file.OpenReadStream();
 
                 var req = new PutObjectRequest
                 {
-                    BucketName   = _bucket,
-                    Key          = key,
-                    InputStream  = ms,
-                    ContentType  = file.ContentType ?? "application/octet-stream",
-                    CannedACL    = S3CannedACL.PublicRead,
-                    UseChunkEncoding = false,
-                    DisableMD5Stream = true,
-                    DisableDefaultChecksumValidation = true,
-                    Headers      = { ContentLength = ms.Length },
+                    BucketName = _bucket,
+                    Key = key,
+                    InputStream = stream,
+                    ContentType = file.ContentType ?? "application/octet-stream",
+                    CannedACL = S3CannedACL.PublicRead,
+                    AutoCloseStream = false,
+                    Headers = { ContentLength = file.Length },
                 };
                 await client.PutObjectAsync(req);
             }
 
             var url = $"{_publicUrl.TrimEnd('/')}/{key}";
-            logger.LogInformation("R2 upload complete: {Key}", key);
+            logger.LogInformation("R2 upload complete: {Key} ({SizeMB:F1}MB)", key, file.Length / 1024.0 / 1024.0);
             return new UploadResult(true, url, key);
         }
         catch (AmazonS3Exception ex)
