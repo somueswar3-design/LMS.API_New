@@ -16,7 +16,7 @@ public class CoursesController(LmsDbContext db) : ControllerBase
     [HttpGet]
     [AllowAnonymous]
     public async Task<IActionResult> GetAll(
-        [FromQuery] int? orgId, [FromQuery] int? categoryId,
+        [FromQuery] int? orgId, [FromQuery] int? categoryId, [FromQuery] int? instructorId,
         [FromQuery] string? level, [FromQuery] string? status,
         [FromQuery] string? search, [FromQuery] int page = 1, [FromQuery] int size = 20)
     {
@@ -30,6 +30,7 @@ public class CoursesController(LmsDbContext db) : ControllerBase
 
         if (orgId.HasValue) q = q.Where(c => c.OrganizationId == orgId.Value);
         if (categoryId.HasValue) q = q.Where(c => c.CategoryId == categoryId.Value);
+        if (instructorId.HasValue) q = q.Where(c => c.InstructorId == instructorId.Value);
         if (!string.IsNullOrEmpty(level) && Enum.TryParse<CourseLevel>(level, out var lv))
             q = q.Where(c => c.Level == lv);
         if (!string.IsNullOrEmpty(status) && Enum.TryParse<CourseStatus>(status, out var st))
