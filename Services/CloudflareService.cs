@@ -109,6 +109,10 @@ public class CloudflareService(IConfiguration config, ILogger<CloudflareService>
                     // throughput and memory use. R2 supports up to 10,000 parts.
                     PartSize = 10 * 1024 * 1024,
                     AutoCloseStream = false, // we own the stream's lifetime via `using`
+                    // See note above on PutObjectRequest — R2 doesn't support
+                    // the chunked streaming-signature mode the SDK defaults
+                    // to for non-seekable streams; disable it here too.
+                    DisablePayloadSigning = true,
                 };
 
                 var lastLoggedPct = -10;
@@ -142,6 +146,14 @@ public class CloudflareService(IConfiguration config, ILogger<CloudflareService>
                     CannedACL = S3CannedACL.PublicRead,
                     AutoCloseStream = false,
                     Headers = { ContentLength = file.Length },
+                    // Cloudflare R2 doesn't implement the AWS SDK's chunked
+                    // streaming-signature mode ("STREAMING-AWS4-HMAC-SHA256-
+                    // PAYLOAD not implemented"), which .NET's PutObjectRequest
+                    // uses by default for non-seekable streams. Disabling
+                    // payload signing makes the SDK compute a single upfront
+                    // signature instead — the mode R2 actually supports.
+                    DisablePayloadSigning = true,
+                    UseChunkEncoding = false,
                 };
                 await client.PutObjectAsync(req);
             }
