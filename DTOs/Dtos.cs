@@ -72,7 +72,7 @@ public record CourseDto(
     List<ModuleDto>? Modules,
     bool EnforceSequentialLessons = false
 );
-public record CreateCourseRequest(string Title, string? Description, string? ThumbnailUrl, string Level, decimal Price, bool IsFree, int CategoryId, int InstructorId, int OrganizationId, string? Tags, string? Language = "English", bool EnforceSequentialLessons = false);
+public record CreateCourseRequest(string Title, string? Description, string? ThumbnailUrl, string Level, decimal Price, bool IsFree, int? CategoryId, int? InstructorId, int OrganizationId, string? Tags, string? Language = "English", bool EnforceSequentialLessons = false);
 public record UpdateCourseRequest(string? Title, string? Description, string? ThumbnailUrl, string? Level, string? Status, decimal? Price, bool? IsFree, int? CategoryId, string? Tags, bool? EnforceSequentialLessons = null);
 
 // ─── MODULE ────────────────────────────────────────────────────────────────────

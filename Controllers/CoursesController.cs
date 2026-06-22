@@ -63,24 +63,41 @@ public class CoursesController(LmsDbContext db) : ControllerBase
     [Authorize(Roles = "SuperAdmin,OrgAdmin,Instructor")]
     public async Task<IActionResult> Create([FromBody] CreateCourseRequest req)
     {
-        var course = new Course
+        if (string.IsNullOrWhiteSpace(req.Title))
+            return BadRequest(new { message = "Title is required" });
+        if (!Enum.TryParse<CourseLevel>(req.Level, true, out var level))
+            return BadRequest(new { message = $"Invalid level: {req.Level}" });
+
+        try
         {
-            Title = req.Title,
-            Description = req.Description,
-            ThumbnailUrl = req.ThumbnailUrl,
-            Level = Enum.Parse<CourseLevel>(req.Level),
-            Price = req.Price,
-            IsFree = req.IsFree,
-            CategoryId = req.CategoryId,
-            InstructorId = req.InstructorId,
-            OrganizationId = req.OrganizationId,
-            Tags = req.Tags,
-            Language = req.Language,
-            EnforceSequentialLessons = req.EnforceSequentialLessons
-        };
-        db.Courses.Add(course);
-        await db.SaveChangesAsync();
-        return CreatedAtAction(nameof(Get), new { id = course.Id }, new { course.Id });
+            var course = new Course
+            {
+                Title = req.Title,
+                Description = req.Description,
+                ThumbnailUrl = req.ThumbnailUrl,
+                Level = level,
+                Price = req.Price,
+                IsFree = req.IsFree,
+                // Nullable on both the DTO and the model — only assign when
+                // the frontend actually sent a real category/instructor.
+                // Previously this defaulted to 0 when omitted, which is not
+                // a valid foreign key and crashed SaveChangesAsync with an
+                // unhandled (and unreturned) exception.
+                CategoryId = req.CategoryId is > 0 ? req.CategoryId : null,
+                InstructorId = req.InstructorId is > 0 ? req.InstructorId : null,
+                OrganizationId = req.OrganizationId,
+                Tags = req.Tags,
+                Language = req.Language,
+                EnforceSequentialLessons = req.EnforceSequentialLessons
+            };
+            db.Courses.Add(course);
+            await db.SaveChangesAsync();
+            return CreatedAtAction(nameof(Get), new { id = course.Id }, new { course.Id });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = $"Failed to create course: {ex.Message}" });
+        }
     }
 
     [HttpPut("{id}")]
@@ -90,20 +107,27 @@ public class CoursesController(LmsDbContext db) : ControllerBase
         var course = await db.Courses.FindAsync(id);
         if (course is null) return NotFound();
 
-        if (req.Title is not null) course.Title = req.Title;
-        if (req.Description is not null) course.Description = req.Description;
-        if (req.ThumbnailUrl is not null) course.ThumbnailUrl = req.ThumbnailUrl;
-        if (req.Level is not null) course.Level = Enum.Parse<CourseLevel>(req.Level);
-        if (req.Status is not null) course.Status = Enum.Parse<CourseStatus>(req.Status);
-        if (req.Price is not null) course.Price = req.Price.Value;
-        if (req.IsFree is not null) course.IsFree = req.IsFree.Value;
-        if (req.CategoryId is not null) course.CategoryId = req.CategoryId.Value;
-        if (req.Tags is not null) course.Tags = req.Tags;
-        if (req.EnforceSequentialLessons is not null) course.EnforceSequentialLessons = req.EnforceSequentialLessons.Value;
-        course.UpdatedAt = DateTime.UtcNow;
+        try
+        {
+            if (req.Title is not null) course.Title = req.Title;
+            if (req.Description is not null) course.Description = req.Description;
+            if (req.ThumbnailUrl is not null) course.ThumbnailUrl = req.ThumbnailUrl;
+            if (req.Level is not null) course.Level = Enum.Parse<CourseLevel>(req.Level);
+            if (req.Status is not null) course.Status = Enum.Parse<CourseStatus>(req.Status);
+            if (req.Price is not null) course.Price = req.Price.Value;
+            if (req.IsFree is not null) course.IsFree = req.IsFree.Value;
+            if (req.CategoryId is not null) course.CategoryId = req.CategoryId.Value;
+            if (req.Tags is not null) course.Tags = req.Tags;
+            if (req.EnforceSequentialLessons is not null) course.EnforceSequentialLessons = req.EnforceSequentialLessons.Value;
+            course.UpdatedAt = DateTime.UtcNow;
 
-        await db.SaveChangesAsync();
-        return NoContent();
+            await db.SaveChangesAsync();
+            return NoContent();
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = $"Failed to update course: {ex.Message}" });
+        }
     }
 
     [HttpDelete("{id}")]
