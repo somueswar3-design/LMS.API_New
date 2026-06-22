@@ -235,6 +235,15 @@ public class Lesson
     public string? ContentBlocksJson { get; set; }
     public int ModuleId { get; set; }
     public Module Module { get; set; } = null!;
+    // Self-referencing relationship enabling infinite lesson nesting
+    // (Lesson → Sub-lesson → Sub-sub-lesson → ...). Root-level lessons
+    // directly under a module have ParentLessonId == null. Only leaf
+    // lessons (no children) are expected to carry real playable content
+    // (VideoUrl/Content/ContentBlocksJson) — parent lessons in the tree
+    // act purely as organizational folders.
+    public int? ParentLessonId { get; set; }
+    public Lesson? ParentLesson { get; set; }
+    public ICollection<Lesson> ChildLessons { get; set; } = [];
     public ICollection<LessonProgress> Progresses { get; set; } = [];
     public ICollection<LessonResource> Resources { get; set; } = [];
 }

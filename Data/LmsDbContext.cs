@@ -86,6 +86,18 @@ public class LmsDbContext(DbContextOptions<LmsDbContext> options) : DbContext(op
             .IsRequired(false)
             .OnDelete(DeleteBehavior.SetNull);
 
+        // ── Lesson self-referencing tree (infinite sub-lesson nesting) ──
+        // Restrict (not Cascade) — EF/SQL Server/MySQL reject a cascade
+        // path here since a lesson is both the "one" and "many" side of
+        // the same relationship, which would create a delete cycle.
+        // Application code (DeleteLesson) is responsible for recursively
+        // deleting/reassigning children before removing a parent lesson.
+        b.Entity<Lesson>()
+            .HasOne(l => l.ParentLesson).WithMany(l => l.ChildLessons)
+            .HasForeignKey(l => l.ParentLessonId)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.Restrict);
+
         b.Entity<Course>()
             .HasOne(c => c.Instructor).WithMany()
             .HasForeignKey(c => c.InstructorId)

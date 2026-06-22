@@ -16,7 +16,9 @@ public record LessonDto(
     int ModuleId, string ModuleTitle,
     string? VideoUrl, string? FileUrl, string? Content,
     List<ContentBlock> ContentBlocks,
-    List<LessonResourceDto> Resources
+    List<LessonResourceDto> Resources,
+    int? ParentLessonId = null,
+    List<LessonDto>? ChildLessons = null
 );
 
 public record LessonResourceDto(int Id, string Title, string FileUrl, long FileSizeBytes, string Type, int DisplayOrder);
@@ -25,14 +27,16 @@ public record CreateLessonRequest(
     string Title, string? Description,
     string Type, bool IsPreview, bool IsPublished,
     int DisplayOrder, int DurationSecs, int ModuleId,
-    string? VideoUrl, string? FileUrl, string? Content
+    string? VideoUrl, string? FileUrl, string? Content,
+    int? ParentLessonId = null
 );
 
 public record UpdateLessonRequest(
     string? Title, string? Description,
     string? Type, bool? IsPreview, bool? IsPublished,
     int? DisplayOrder, int? DurationSecs,
-    string? VideoUrl, string? FileUrl, string? Content
+    string? VideoUrl, string? FileUrl, string? Content,
+    int? ParentLessonId = null
 );
 
 public record SaveContentBlocksRequest(List<ContentBlock> Blocks);
@@ -46,13 +50,31 @@ public class LessonsController(LmsDbContext db) : ControllerBase
     [HttpGet("module/{moduleId}")]
     public async Task<IActionResult> GetByModule(int moduleId)
     {
-        var lessons = await db.Lessons
+        // Fetch the whole module's lesson tree in one query, then build
+        // the parent→children structure in memory. Doing the recursion
+        // client-side (in C#, not via N+1 queries) keeps this to a single
+        // round-trip to the database regardless of how deep the tree goes.
+        var allLessons = await db.Lessons
             .Include(l => l.Module)
             .Include(l => l.Resources)
             .Where(l => l.ModuleId == moduleId)
             .OrderBy(l => l.DisplayOrder)
             .ToListAsync();
-        return Ok(lessons.Select(Map));
+
+        var byParent = allLessons
+            .GroupBy(l => l.ParentLessonId)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        LessonDto MapWithChildren(Lesson l)
+        {
+            var children = byParent.TryGetValue(l.Id, out var kids)
+                ? kids.OrderBy(k => k.DisplayOrder).Select(MapWithChildren).ToList()
+                : new List<LessonDto>();
+            return Map(l) with { ChildLessons = children };
+        }
+
+        var roots = byParent.TryGetValue(null, out var rootLessons) ? rootLessons : [];
+        return Ok(roots.OrderBy(l => l.DisplayOrder).Select(MapWithChildren));
     }
 
     [HttpGet("{id}")]
@@ -71,6 +93,17 @@ public class LessonsController(LmsDbContext db) : ControllerBase
     {
         if (!Enum.TryParse<LessonType>(req.Type, out var lt)) lt = LessonType.Video;
 
+        // A parent lesson, if specified, must exist and belong to the same
+        // module — prevents accidentally building a tree that spans
+        // multiple modules, which would make the module's own lesson list
+        // inconsistent.
+        if (req.ParentLessonId is not null)
+        {
+            var parentExists = await db.Lessons.AnyAsync(p => p.Id == req.ParentLessonId.Value && p.ModuleId == req.ModuleId);
+            if (!parentExists)
+                return BadRequest(new { message = "Parent lesson not found in this module" });
+        }
+
         var lesson = new Lesson
         {
             Title = req.Title,
@@ -81,6 +114,7 @@ public class LessonsController(LmsDbContext db) : ControllerBase
             DisplayOrder = req.DisplayOrder,
             DurationSecs = req.DurationSecs,
             ModuleId = req.ModuleId,
+            ParentLessonId = req.ParentLessonId,
             VideoUrl = req.VideoUrl,
             FileUrl = req.FileUrl,
             Content = req.Content,
@@ -118,6 +152,30 @@ public class LessonsController(LmsDbContext db) : ControllerBase
         if (req.FileUrl is not null) l.FileUrl = req.FileUrl;
         if (req.Content is not null) l.Content = req.Content;
         if (req.Type is not null && Enum.TryParse<LessonType>(req.Type, out var lt)) l.Type = lt;
+
+        if (req.ParentLessonId != l.ParentLessonId)
+        {
+            if (req.ParentLessonId == id)
+                return BadRequest(new { message = "A lesson cannot be its own parent" });
+            if (req.ParentLessonId is not null)
+            {
+                // Walk up from the proposed new parent to the root,
+                // checking we never re-encounter this lesson — that would
+                // mean moving a lesson underneath one of its own
+                // descendants, creating a cycle in the tree.
+                var cursor = await db.Lessons.FindAsync(req.ParentLessonId.Value);
+                while (cursor is not null)
+                {
+                    if (cursor.Id == id)
+                        return BadRequest(new { message = "Cannot move a lesson under its own descendant" });
+                    cursor = cursor.ParentLessonId is not null
+                        ? await db.Lessons.FindAsync(cursor.ParentLessonId.Value)
+                        : null;
+                }
+            }
+            l.ParentLessonId = req.ParentLessonId;
+        }
+
         await db.SaveChangesAsync();
         return NoContent();
     }
@@ -128,7 +186,26 @@ public class LessonsController(LmsDbContext db) : ControllerBase
     {
         var l = await db.Lessons.FindAsync(id);
         if (l is null) return NotFound();
-        db.Lessons.Remove(l);
+
+        // The self-referencing FK uses Restrict (not Cascade) delete
+        // behavior, so removing a lesson with children would otherwise
+        // fail at the database level. Recursively collect and remove the
+        // whole subtree first, deepest descendants first, then the
+        // lesson itself.
+        var allInModule = await db.Lessons.Where(x => x.ModuleId == l.ModuleId).ToListAsync();
+        var toDelete = new List<Lesson>();
+        void CollectDescendants(int parentId)
+        {
+            foreach (var child in allInModule.Where(x => x.ParentLessonId == parentId))
+            {
+                CollectDescendants(child.Id);
+                toDelete.Add(child);
+            }
+        }
+        CollectDescendants(id);
+        toDelete.Add(l);
+
+        db.Lessons.RemoveRange(toDelete);
         await db.SaveChangesAsync();
         return NoContent();
     }
@@ -356,7 +433,8 @@ public class LessonsController(LmsDbContext db) : ControllerBase
         l.ModuleId, l.Module?.Title ?? "",
         l.VideoUrl, l.FileUrl, l.Content,
         ContentBlocks.Parse(l.ContentBlocksJson).OrderBy(b => b.Order).ToList(),
-        l.Resources.Select(MapResource).ToList()
+        l.Resources.Select(MapResource).ToList(),
+        l.ParentLessonId
     );
 
     static LessonResourceDto MapResource(LessonResource r) => new(

@@ -255,12 +255,17 @@ public class ModulesController(LmsDbContext db) : ControllerBase
     public async Task<IActionResult> GetByCourse(int courseId)
     {
         var modules = await db.Modules
-            .Include(m => m.Lessons.OrderBy(l => l.DisplayOrder))
+            .Include(m => m.Lessons)
             .Where(m => m.CourseId == courseId)
             .OrderBy(m => m.DisplayOrder)
             .ToListAsync();
-        return Ok(modules.Select(m => new ModuleDto(m.Id, m.Title, m.Description, m.DisplayOrder, m.IsPreview, m.CourseId,
-            m.Lessons.OrderBy(l => l.DisplayOrder).Select(l => (object)new
+
+        object MapLessonWithChildren(Lesson l, string moduleTitle, Dictionary<int?, List<Lesson>> byParent)
+        {
+            var children = byParent.TryGetValue(l.Id, out var kids)
+                ? kids.OrderBy(k => k.DisplayOrder).Select(k => MapLessonWithChildren(k, moduleTitle, byParent)).ToList()
+                : new List<object>();
+            return new
             {
                 l.Id,
                 l.Title,
@@ -271,13 +276,24 @@ public class ModulesController(LmsDbContext db) : ControllerBase
                 l.DisplayOrder,
                 l.DurationSecs,
                 l.ModuleId,
-                ModuleTitle = m.Title,
+                ModuleTitle = moduleTitle,
                 l.VideoUrl,
                 l.FileUrl,
                 l.Content,
+                l.ParentLessonId,
                 ContentBlocksCount = string.IsNullOrEmpty(l.ContentBlocksJson) ? 0 :
-                    System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(l.ContentBlocksJson).GetArrayLength()
-            }).ToList())));
+                    System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(l.ContentBlocksJson).GetArrayLength(),
+                Lessons = children, // nested sub-lessons (tree)
+            };
+        }
+
+        return Ok(modules.Select(m =>
+        {
+            var byParent = m.Lessons.GroupBy(l => l.ParentLessonId).ToDictionary(g => g.Key, g => g.ToList());
+            var rootLessons = byParent.TryGetValue(null, out var roots) ? roots : new List<Lesson>();
+            return new ModuleDto(m.Id, m.Title, m.Description, m.DisplayOrder, m.IsPreview, m.CourseId,
+                rootLessons.OrderBy(l => l.DisplayOrder).Select(l => MapLessonWithChildren(l, m.Title, byParent)).ToList());
+        }));
     }
 
     [HttpPost]
