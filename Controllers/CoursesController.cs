@@ -283,8 +283,14 @@ public class ModulesController(LmsDbContext db) : ControllerBase
                     l.FileUrl,
                     l.Content,
                     l.ParentLessonId,
-                    ContentBlocksCount = string.IsNullOrEmpty(l.ContentBlocksJson) ? 0 :
-                        System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(l.ContentBlocksJson).GetArrayLength(),
+                    // Uses the same defensive ContentBlocks.Parse helper as
+                    // everywhere else in the app (LessonsController) instead
+                    // of raw JsonElement.GetArrayLength(), which throws
+                    // InvalidOperationException on any lesson whose stored
+                    // ContentBlocksJson isn't a well-formed JSON array —
+                    // a real possibility for older/seeded rows predating
+                    // this column's current shape.
+                    ContentBlocksCount = ContentBlocks.Parse(l.ContentBlocksJson).Count,
                     Lessons = children, // nested sub-lessons (tree)
                 };
             }
