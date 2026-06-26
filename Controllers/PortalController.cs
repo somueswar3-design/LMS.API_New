@@ -1,3 +1,12 @@
+using Amazon.Runtime.Internal.Endpoints.StandardLibrary;
+using Amazon.S3.Model;
+using Microsoft.AspNetCore.Mvc.RazorPages;
+using static System.Runtime.InteropServices.JavaScript.JSType;
+using System.Collections.Generic;
+using System.Composition;
+using System.Drawing;
+using System.Reflection;
+
 using LMS.API.Data;
 using LMS.API.DTOs;
 using LMS.API.Models;
@@ -182,11 +191,43 @@ public class PortalController(LmsDbContext db) : ControllerBase
                 u.FirstName,
                 u.LastName,
                 u.AvatarUrl,
-                CourseCount = db.Courses.Count(c => c.InstructorId == u.Id && c.Status == CourseStatus.Published)
+                u.Bio,
+                CourseCount = db.Courses.Count(c => c.InstructorId == u.Id && c.Status == CourseStatus.Published),
+                StudentCount = db.Enrollments.Count(e => e.Course.InstructorId == u.Id),
             })
             .ToListAsync();
 
         return Ok(instructors);
+    }
+
+    // ── Public reviews — top-rated, with a written review, across the org's
+    // published courses. Used for the homepage testimonials section so the
+    // copy shown there is always real student feedback, never fabricated.
+    [HttpGet("{orgId:int}/reviews")]
+    public async Task<IActionResult> GetReviews(int orgId, [FromQuery] int limit = 9)
+    {
+        var reviews = await db.CourseRatings
+            .Include(r => r.User)
+            .Include(r => r.Course)
+            .Where(r => r.Course.OrganizationId == orgId
+                && r.Course.Status == CourseStatus.Published
+                && r.Rating >= 4
+                && r.Review != null && r.Review != "")
+            .OrderByDescending(r => r.CreatedAt)
+            .Take(limit)
+            .Select(r => new
+            {
+                r.Id,
+                r.Rating,
+                r.Review,
+                r.CreatedAt,
+                StudentName = r.User.FirstName + " " + r.User.LastName,
+                StudentAvatar = r.User.AvatarUrl,
+                CourseTitle = r.Course.Title,
+            })
+            .ToListAsync();
+
+        return Ok(reviews);
     }
 
     // ─── Mappers ───────────────────────────────────────────────────────
