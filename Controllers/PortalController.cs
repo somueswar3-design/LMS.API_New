@@ -1,12 +1,3 @@
-using Amazon.Runtime.Internal.Endpoints.StandardLibrary;
-using Amazon.S3.Model;
-using Microsoft.AspNetCore.Mvc.RazorPages;
-using static System.Runtime.InteropServices.JavaScript.JSType;
-using System.Collections.Generic;
-using System.Composition;
-using System.Drawing;
-using System.Reflection;
-
 using LMS.API.Data;
 using LMS.API.DTOs;
 using LMS.API.Models;
@@ -110,7 +101,7 @@ public class PortalController(LmsDbContext db) : ControllerBase
             .Where(c => c.OrganizationId == orgId && c.Status == CourseStatus.Published)
             .AsQueryable();
 
-        if (categoryId.HasValue) q = q.Where(c => c.CategoryId == categoryId || c.Category.ParentId == categoryId);
+        if (categoryId.HasValue) q = q.Where(c => c.CategoryId == categoryId || (c.Category != null && c.Category.ParentId == categoryId));
         if (!string.IsNullOrEmpty(level) && Enum.TryParse<CourseLevel>(level, out var lv)) q = q.Where(c => c.Level == lv);
         if (!string.IsNullOrEmpty(search)) q = q.Where(c => c.Title.Contains(search) || (c.Description != null && c.Description.Contains(search)));
         if (free.HasValue) q = q.Where(c => c.IsFree == free.Value);
@@ -236,9 +227,14 @@ public class PortalController(LmsDbContext db) : ControllerBase
         c.Level.ToString(), c.Price, c.IsFree,
         c.DurationMinutes, c.Language,
         c.InstructorId,
-        $"{c.Instructor.FirstName} {c.Instructor.LastName}",
-        c.Instructor.AvatarUrl,
-        c.CategoryId, c.Category.Name,
+        // Courses can exist with no instructor/category assigned (made
+        // nullable so creating a course doesn't require picking either) —
+        // c.Instructor/c.Category will be null in that case, so accessing
+        // .FirstName/.Name directly threw a NullReferenceException for
+        // every such course, taking down the whole public courses list.
+        c.Instructor is not null ? $"{c.Instructor.FirstName} {c.Instructor.LastName}" : null,
+        c.Instructor?.AvatarUrl,
+        c.CategoryId, c.Category?.Name,
         c.Enrollments.Count,
         c.Ratings.Count > 0 ? c.Ratings.Average(r => r.Rating) : 0,
         c.Ratings.Count,
@@ -250,9 +246,9 @@ public class PortalController(LmsDbContext db) : ControllerBase
         c.Level.ToString(), c.Price, c.IsFree,
         c.DurationMinutes, c.Language,
         c.InstructorId,
-        $"{c.Instructor.FirstName} {c.Instructor.LastName}",
-        c.Instructor.AvatarUrl,
-        c.CategoryId, c.Category.Name,
+        c.Instructor is not null ? $"{c.Instructor.FirstName} {c.Instructor.LastName}" : null,
+        c.Instructor?.AvatarUrl,
+        c.CategoryId, c.Category?.Name,
         c.Enrollments.Count,
         c.Ratings.Count > 0 ? c.Ratings.Average(r => r.Rating) : 0,
         c.Ratings.Count,
